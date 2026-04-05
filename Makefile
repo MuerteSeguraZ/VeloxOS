@@ -21,6 +21,7 @@ SRCS_C = kernel/kernel.c                  \
          kernel/ui/window.c               \
          kernel/ui/desktop.c              \
          kernel/ui/menu.c                 \
+         kernel/ui/input.c                \
          kernel/drivers/mouse.c           \
          kernel/drivers/rtc.c             \
          kernel/drivers/ata.c             \
@@ -31,7 +32,10 @@ SRCS_C = kernel/kernel.c                  \
 SRCS_S = kernel/arch/boot.asm \
          kernel/arch/isr.asm
 
-OBJS = $(SRCS_S:.asm=.o) $(SRCS_C:.c=.o)
+# Map all sources to obj/ directory preserving subdir structure
+OBJS_C = $(patsubst kernel/%.c, obj/%.o, $(SRCS_C))
+OBJS_S = $(patsubst kernel/%.asm, obj/%.o, $(SRCS_S))
+OBJS   = $(OBJS_S) $(OBJS_C)
 
 ISO    = velox.iso
 KERNEL = iso/boot/velox.elf
@@ -40,14 +44,17 @@ KERNEL = iso/boot/velox.elf
 
 all: $(ISO)
 
-kernel/%.o: kernel/%.asm
+# Create obj subdirs as needed
+obj/%.o: kernel/%.asm
+	@mkdir -p $(dir $@)
 	$(AS) $(ASFLAGS) $< -o $@
 
-kernel/%.o: kernel/%.c
+obj/%.o: kernel/%.c
+	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(KERNEL): $(OBJS)
-	mkdir -p iso/boot/grub
+	@mkdir -p iso/boot/grub
 	$(LD) $(LDFLAGS) $(OBJS) -o $@
 
 $(ISO): $(KERNEL)
@@ -58,6 +65,5 @@ run: $(ISO)
 	qemu-system-x86_64 -cdrom $(ISO) -m 256M -vga std -no-reboot
 
 clean:
-	rm -f kernel/arch/*.o kernel/graphics/*.o kernel/ui/*.o \
-	      kernel/drivers/*.o kernel/mm/*.o kernel/fs/*.o kernel/*.o \
-	      $(KERNEL) $(ISO)
+	rm -rf obj/
+	rm -f $(KERNEL) $(ISO)

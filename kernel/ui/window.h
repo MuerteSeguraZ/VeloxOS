@@ -8,7 +8,8 @@
 #define CURSOR_W        12
 #define CURSOR_H        12
 
-// ── Window close/min/max button hit areas ────────────────────────────────────
+#define WIN_CONTENT_MAX 1024   // max bytes of text content a window can show
+
 #define BTN_CLOSE 1
 #define BTN_MIN   2
 #define BTN_MAX   3
@@ -18,14 +19,14 @@ typedef struct {
     char title[TITLE_MAX];
     int  visible;
     int  minimized;
-
-    // Drag state
     int  dragging;
     int  drag_ox, drag_oy;
+
+    // Optional text content (e.g. file contents)
+    char content[WIN_CONTENT_MAX];
+    int  has_content;
 } window_t;
 
-// Draw a single window (active = 1 if focused)
 void window_draw(window_t *win, int active);
-
-// Hit test a click on a window's titlebar buttons — returns BTN_* or 0
-int window_hit_button(window_t *win, int mx, int my);
+int  window_hit_button(window_t *win, int mx, int my);
+void window_set_content(window_t *win, const char *text, uint32_t len);

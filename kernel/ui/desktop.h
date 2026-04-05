@@ -11,7 +11,6 @@
 #define COL_TASKBAR_BORDER  0x4a7fa5
 #define COL_TASKBAR_BTN     0x1a2a4a
 #define COL_TASKBAR_BTN_ACT 0x2a4a7a
-#define COL_START_BG        0x4a7fa5
 #define COL_CLOCK           0xc0d8f0
 #define COL_TRAY_BG         0x111122
 
@@ -30,6 +29,8 @@ typedef struct {
 
     int      dirty;
     int      needs_full_redraw;
+
+    int      selected_icon;    // fs entry index, -1 = none
 } desktop_t;
 
 extern desktop_t desktop;

@@ -1,4 +1,5 @@
 #include "idt.h"
+#include "../ui/input.h"
 
 #define IDT_ENTRIES 256
 #define PIC1_CMD    0x20
@@ -46,16 +47,15 @@ static void pic_remap(void) {
     outb(PIC2_DATA, 0x02); io_wait();
     outb(PIC1_DATA, 0x01); io_wait();
     outb(PIC2_DATA, 0x01); io_wait();
-    // PIC1: unmask IRQ0 (PIT), IRQ1 (keyboard), IRQ2 (cascade to PIC2)
-    // PIC2: unmask IRQ12 (mouse), mask rest
-    outb(PIC1_DATA, 0xF8);   // 11111000
-    outb(PIC2_DATA, 0xEF);   // 11101111
+    outb(PIC1_DATA, 0xF8);   // IRQ0,1,2 unmasked
+    outb(PIC2_DATA, 0xEF);   // IRQ12 unmasked
 }
 
-// Keyboard handler — must drain scancode byte or keyboard controller
-// will never send another IRQ, stalling the PIC
 static void kbd_irq_handler(void) {
-    inb(0x60);   // read and discard scancode
+    uint8_t sc = inb(0x60);
+    // Forward to input box if active
+    if (input_active())
+        input_handle_key(sc);
 }
 
 void idt_init(void) {
@@ -80,9 +80,7 @@ void idt_init(void) {
     idt_ptr.base  = (uint64_t)&idt;
 
     pic_remap();
-
-    // Register default handlers
-    irq_register(1, kbd_irq_handler);   // keyboard — drain scancode
+    irq_register(1, kbd_irq_handler);
 
     __asm__ volatile ("lidt %0" : : "m"(idt_ptr));
     __asm__ volatile ("sti");
