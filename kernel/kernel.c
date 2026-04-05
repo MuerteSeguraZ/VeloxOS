@@ -2,9 +2,11 @@
 #include "graphics/framebuffer.h"
 #include "ui/desktop.h"
 #include "drivers/mouse.h"
+#include "drivers/ata.h"
 #include "arch/idt.h"
 #include "arch/pit.h"
 #include "mm/alloc.h"
+#include "fs/fs.h"
 
 #define MB2_TAG_END         0
 #define MB2_TAG_FRAMEBUFFER 8
@@ -68,22 +70,59 @@ void kernel_main(uint32_t mb2_info_phys) {
     void *backbuf = mm_alloc(fb_width * fb_height * 4);
 
     fb_init(fb_addr, fb_pitch, fb_width, fb_height, fb_bpp, backbuf);
-    idt_init();       // sets up IDT, remaps PIC, enables interrupts
-    pit_init(60);     // IRQ0 @ 60hz
-    mouse_init();     // IRQ12 driven
+    idt_init();
+    pit_init(60);
+    mouse_init();
+
+    // ── ATA + Filesystem init ─────────────────────────────────────────────────
+    ata_init();
+
+    // Scan all 4 ATA positions — use first drive found
+    ata_drive_t *disk = 0;
+    int found_bus = -1, found_drv = -1;
+    for (int b = 0; b <= 1 && !disk; b++) {
+        for (int d = 0; d <= 1 && !disk; d++) {
+            ata_drive_t *c = ata_get_drive(b, d);
+            if (c->present) {
+                disk      = c;
+                found_bus = b;
+                found_drv = d;
+            }
+        }
+    }
+
+    int fs_ok = 0;
+    if (disk) {
+        if (!vfs_mount(found_bus, found_drv))
+            vfs_format(found_bus, found_drv);
+        fs_ok = 1;
+
+        // Write a hello file on first boot
+        if (vfs_find("velox.txt") < 0) {
+            int idx = vfs_create("velox.txt", 0);
+            if (idx >= 0) {
+                const char *msg =
+                    "Welcome to Velox OS!\n"
+                    "This file was created on first boot.\n";
+                uint32_t len = 0;
+                while (msg[len]) len++;
+                vfs_write(idx, msg, len);
+            }
+        }
+    }
+
+    // ── Desktop ───────────────────────────────────────────────────────────────
     desktop_init();
-
-    desktop_add_window(80,  60,  340, 220, "Welcome");
+    desktop_add_window(80,  60,  340, 220,
+                       fs_ok ? "Welcome - Disk OK" : "Welcome - No Disk");
     desktop_add_window(450, 130, 300, 200, "About Velox");
-
     desktop_redraw();
 
     uint64_t last_clock_tick = 0;
 
     while (1) {
-        pit_wait_tick();    // hlt until IRQ0
+        pit_wait_tick();
 
-        // Read accumulated mouse delta from IRQ12 handler
         int dx, dy, btn;
         if (mouse_get_delta(&dx, &dy, &btn))
             desktop_mouse_move(dx, dy, btn);
@@ -98,7 +137,6 @@ void kernel_main(uint32_t mb2_info_phys) {
             desktop.dirty = 0;
         }
 
-        // Update clock every second
         if (now - last_clock_tick >= 60) {
             desktop.needs_full_redraw = 1;
             last_clock_tick = now;

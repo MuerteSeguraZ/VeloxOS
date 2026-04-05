@@ -22,13 +22,15 @@ SRCS_C = kernel/kernel.c                  \
          kernel/ui/desktop.c              \
          kernel/drivers/mouse.c           \
          kernel/drivers/rtc.c             \
+         kernel/drivers/ata.c             \
+         kernel/fs/fs.c                   \
          kernel/arch/idt.c                \
          kernel/arch/pit.c
 
 SRCS_S = kernel/arch/boot.asm \
          kernel/arch/isr.asm
 
-OBJS = $(addprefix obj/,$(SRCS_S:.asm=.o) $(SRCS_C:.c=.o))
+OBJS = $(SRCS_S:.asm=.o) $(SRCS_C:.c=.o)
 
 ISO    = velox.iso
 KERNEL = iso/boot/velox.elf
@@ -37,12 +39,10 @@ KERNEL = iso/boot/velox.elf
 
 all: $(ISO)
 
-obj/kernel/%.o: kernel/%.asm
-	@mkdir -p $(dir $@)
+kernel/%.o: kernel/%.asm
 	$(AS) $(ASFLAGS) $< -o $@
 
-obj/kernel/%.o: kernel/%.c
-	@mkdir -p $(dir $@)
+kernel/%.o: kernel/%.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(KERNEL): $(OBJS)
@@ -57,4 +57,6 @@ run: $(ISO)
 	qemu-system-x86_64 -cdrom $(ISO) -m 256M -vga std -no-reboot
 
 clean:
-	rm -rf obj/ $(KERNEL) $(ISO)
+	rm -f kernel/arch/*.o kernel/graphics/*.o kernel/ui/*.o \
+	      kernel/drivers/*.o kernel/mm/*.o kernel/fs/*.o kernel/*.o \
+	      $(KERNEL) $(ISO)
