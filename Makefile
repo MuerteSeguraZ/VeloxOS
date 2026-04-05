@@ -20,6 +20,7 @@ SRCS_C = kernel/kernel.c                  \
          kernel/graphics/text.c           \
          kernel/ui/window.c               \
          kernel/ui/desktop.c              \
+         kernel/ui/menu.c                 \
          kernel/drivers/mouse.c           \
          kernel/drivers/rtc.c             \
          kernel/drivers/ata.c             \

@@ -74,20 +74,13 @@ void kernel_main(uint32_t mb2_info_phys) {
     pit_init(60);
     mouse_init();
 
-    // ── ATA + Filesystem init ─────────────────────────────────────────────────
     ata_init();
-
-    // Scan all 4 ATA positions — use first drive found
     ata_drive_t *disk = 0;
     int found_bus = -1, found_drv = -1;
     for (int b = 0; b <= 1 && !disk; b++) {
         for (int d = 0; d <= 1 && !disk; d++) {
             ata_drive_t *c = ata_get_drive(b, d);
-            if (c->present) {
-                disk      = c;
-                found_bus = b;
-                found_drv = d;
-            }
+            if (c->present) { disk = c; found_bus = b; found_drv = d; }
         }
     }
 
@@ -96,22 +89,16 @@ void kernel_main(uint32_t mb2_info_phys) {
         if (!vfs_mount(found_bus, found_drv))
             vfs_format(found_bus, found_drv);
         fs_ok = 1;
-
-        // Write a hello file on first boot
         if (vfs_find("velox.txt") < 0) {
             int idx = vfs_create("velox.txt", 0);
             if (idx >= 0) {
-                const char *msg =
-                    "Welcome to Velox OS!\n"
-                    "This file was created on first boot.\n";
-                uint32_t len = 0;
-                while (msg[len]) len++;
+                const char *msg = "Welcome to Velox OS!\nFirst boot.\n";
+                uint32_t len = 0; while (msg[len]) len++;
                 vfs_write(idx, msg, len);
             }
         }
     }
 
-    // ── Desktop ───────────────────────────────────────────────────────────────
     desktop_init();
     desktop_add_window(80,  60,  340, 220,
                        fs_ok ? "Welcome - Disk OK" : "Welcome - No Disk");
@@ -123,9 +110,9 @@ void kernel_main(uint32_t mb2_info_phys) {
     while (1) {
         pit_wait_tick();
 
-        int dx, dy, btn;
-        if (mouse_get_delta(&dx, &dy, &btn))
-            desktop_mouse_move(dx, dy, btn);
+        int dx, dy, btn_l, btn_r;
+        if (mouse_get_delta(&dx, &dy, &btn_l, &btn_r))
+            desktop_mouse_move(dx, dy, btn_l, btn_r);
 
         uint64_t now = pit_ticks();
 

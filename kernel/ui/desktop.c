@@ -1,11 +1,13 @@
 #include "desktop.h"
+#include "menu.h"
 #include "../graphics/framebuffer.h"
 #include "../graphics/text.h"
 #include "../drivers/rtc.h"
+#include "../fs/fs.h"
 
 desktop_t desktop;
 
-// ── RNG for star field ────────────────────────────────────────────────────────
+// ── RNG ───────────────────────────────────────────────────────────────────────
 static uint32_t rng = 0xdeadbeef;
 static uint32_t rng_next(void) {
     rng ^= rng << 13;
@@ -30,23 +32,67 @@ static const uint8_t cursor_bmp[CURSOR_H][CURSOR_W] = {
     {1,1,0,0,0,0,0,0,0,0,0,0},
 };
 
-// ── Internal draws ────────────────────────────────────────────────────────────
+// ── Menu actions ──────────────────────────────────────────────────────────────
 
+// Simple counter for generated filenames
+static int file_counter  = 0;
+static int folder_counter = 0;
+
+static void itoa2(int n, char *buf) {
+    if (n >= 10) { buf[0] = '0' + n/10; buf[1] = '0' + n%10; buf[2] = 0; }
+    else         { buf[0] = '0' + n;    buf[1] = 0; }
+}
+
+static void action_new_file(void) {
+    if (!vfs.mounted) return;
+    char name[32];
+    // Build "New File N.txt"
+    char num[4]; itoa2(++file_counter, num);
+    int i = 0;
+    const char *prefix = "File ";
+    while (*prefix) name[i++] = *prefix++;
+    int j = 0;
+    while (num[j]) name[i++] = num[j++];
+    name[i++] = '.'; name[i++] = 't'; name[i++] = 'x'; name[i++] = 't';
+    name[i]   = 0;
+
+    vfs_create(name, 0);
+    desktop.needs_full_redraw = 1;
+}
+
+static void action_new_folder(void) {
+    if (!vfs.mounted) return;
+    char name[32];
+    char num[4]; itoa2(++folder_counter, num);
+    int i = 0;
+    const char *prefix = "Folder ";
+    while (*prefix) name[i++] = *prefix++;
+    int j = 0;
+    while (num[j]) name[i++] = num[j++];
+    name[i] = 0;
+
+    vfs_create(name, 1);
+    desktop.needs_full_redraw = 1;
+}
+
+static void action_refresh(void) {
+    desktop.needs_full_redraw = 1;
+}
+
+// ── Wallpaper ─────────────────────────────────────────────────────────────────
 static void draw_wallpaper(void) {
     int dh = fb.height - TASKBAR_HEIGHT;
     fb_fill_gradient_v(0, 0, fb.width, dh, COL_DESKTOP_TOP, COL_DESKTOP_BOT);
 
-    // Subtle horizontal nebula band
     int band_y = dh * 2 / 5;
     int band_h = dh / 5;
     for (int i = 0; i < band_h; i++) {
-        uint8_t alpha = (i < band_h/2) ? (i * 40 / (band_h/2))
-                                        : ((band_h-i) * 40 / (band_h/2));
+        uint8_t alpha = (i < band_h/2) ? (uint8_t)(i * 40 / (band_h/2))
+                                        : (uint8_t)((band_h-i) * 40 / (band_h/2));
         uint32_t c = blend(COL_DESKTOP_BOT, 0x2d1b69, alpha);
         fb_fill_rect(0, band_y + i, fb.width, 1, c);
     }
 
-    // Stars
     rng = 0xdeadbeef;
     for (int i = 0; i < 260; i++) {
         int sx = rng_next() % fb.width;
@@ -63,60 +109,65 @@ static void draw_wallpaper(void) {
         if (sy > 0) fb_putpixel(sx, sy-1, 0x666688);
         if (sy < dh-1) fb_putpixel(sx, sy+1, 0x666688);
     }
+
+    // Draw file icons on desktop for each FS entry
+    if (vfs.mounted) {
+        int ix = 20, iy = 20;
+        for (int i = 0; i < VFS_MAX_FILES; i++) {
+            if (!vfs.entries[i].used) continue;
+            // Icon box
+            uint32_t icon_col = vfs.entries[i].is_dir ? 0x4a7fa5 : 0x2a5a3a;
+            fb_fill_rect(ix, iy, 40, 32, icon_col);
+            fb_draw_rect(ix, iy, 40, 32, 0x6a9fc5);
+            // Label below icon
+            text_puts(ix, iy + 34, vfs.entries[i].name,
+                      0xd0d0f0, 0, 1);
+            ix += 70;
+            if (ix + 70 > (int)fb.width - 20) {
+                ix = 20;
+                iy += 70;
+            }
+        }
+    }
 }
 
+// ── Taskbar ───────────────────────────────────────────────────────────────────
 static void draw_taskbar(void) {
     int ty = fb.height - TASKBAR_HEIGHT;
-
-    // Taskbar background with subtle gradient
     fb_fill_gradient_v(0, ty, fb.width, TASKBAR_HEIGHT, 0x0e1628, COL_TASKBAR_BG);
-
-    // Top border line
-    fb_draw_hline(0, ty, fb.width, COL_TASKBAR_BORDER);
+    fb_draw_hline(0, ty,     fb.width, COL_TASKBAR_BORDER);
     fb_draw_hline(0, ty + 1, fb.width, 0x1a2a40);
 
-    // ── Start button ──────────────────────────────────────────────────────────
     int bh = TASKBAR_HEIGHT - 8;
     int by = ty + 4;
+
+    // Start button
     fb_fill_gradient_v(6, by, 56, bh, 0x5a8fbf, 0x3a6f9f);
     fb_draw_rect(6, by, 56, bh, 0x7aafdf);
     text_puts_centered(6, by + (bh - GLYPH_H)/2, 56, "Velox", 0xffffff, 0, 1);
 
-    // ── Window buttons ────────────────────────────────────────────────────────
+    // Window buttons
     int wx = 70;
     for (int i = 0; i < desktop.nwindows; i++) {
         window_t *w = &desktop.windows[i];
         if (!w->visible && !w->minimized) continue;
-
         int active = (i == desktop.active_win);
-        uint32_t bg = active ? COL_TASKBAR_BTN_ACT : COL_TASKBAR_BTN;
-        uint32_t border = active ? COL_TASKBAR_BORDER : 0x2a3a5a;
-
-        fb_fill_rect(wx, by, 110, bh, bg);
-        fb_draw_rect(wx, by, 110, bh, border);
-
-        // Active indicator bar at bottom
+        fb_fill_rect(wx, by, 110, bh, active ? COL_TASKBAR_BTN_ACT : COL_TASKBAR_BTN);
+        fb_draw_rect(wx, by, 110, bh, active ? COL_TASKBAR_BORDER  : 0x2a3a5a);
         if (active)
             fb_fill_rect(wx+2, by + bh - 3, 106, 2, COL_TASKBAR_BORDER);
-
-        // Dot indicator
         uint32_t dot = w->minimized ? 0x888888 : (active ? 0x80c0ff : 0x405070);
         fb_fill_rect(wx + 6, by + bh/2 - 2, 4, 4, dot);
-
         text_puts(wx + 14, by + (bh - GLYPH_H)/2, w->title,
                   active ? 0xf0f0f0 : 0x8899bb, 0, 1);
-
         wx += 118;
     }
 
-    // ── System tray ──────────────────────────────────────────────────────────
-    // Background
+    // Clock
     int tray_w = 90;
     int tray_x = fb.width - tray_w - 4;
     fb_fill_rect(tray_x, by, tray_w, bh, COL_TRAY_BG);
     fb_draw_rect(tray_x, by, tray_w, bh, 0x2a3a5a);
-
-    // Real time from RTC
     rtc_time_t t;
     rtc_read(&t);
     char timebuf[9];
@@ -138,16 +189,18 @@ static void draw_cursor_at(int mx, int my) {
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
-
 void desktop_init(void) {
-    desktop.nwindows    = 0;
-    desktop.active_win  = -1;
-    desktop.mx          = fb.width  / 2;
-    desktop.my          = fb.height / 2;
-    desktop.btn_left    = 0;
-    desktop.dirty       = 1;
+    desktop.nwindows         = 0;
+    desktop.active_win       = -1;
+    desktop.mx               = fb.width  / 2;
+    desktop.my               = fb.height / 2;
+    desktop.btn_left         = 0;
+    desktop.btn_right        = 0;
+    desktop.dirty            = 1;
     desktop.needs_full_redraw = 1;
-    desktop.cursor_saved = 0;
+    desktop.cursor_saved     = 0;
+
+    menu_clear();
 }
 
 int desktop_add_window(int x, int y, int w, int h, const char *title) {
@@ -172,9 +225,8 @@ void desktop_redraw(void) {
     for (int i = 0; i < desktop.nwindows; i++)
         window_draw(&desktop.windows[i], i == desktop.active_win);
     draw_taskbar();
+    menu_draw();
 
-    // Draw cursor into back buffer and save the region for fast restore
-    // Clamp cursor save area
     int sx = desktop.mx, sy = desktop.my;
     if (sx + CURSOR_W > (int)fb.width)  sx = fb.width  - CURSOR_W;
     if (sy + CURSOR_H > (int)fb.height) sy = fb.height - CURSOR_H;
@@ -188,20 +240,17 @@ void desktop_redraw(void) {
 
     draw_cursor_at(desktop.mx, desktop.my);
     fb_flip();
-
     desktop.dirty = 0;
     desktop.needs_full_redraw = 0;
 }
 
 void desktop_update_cursor(void) {
-    // Restore old cursor area in back buffer and on screen
     if (desktop.cursor_saved) {
         fb_restore_region(desktop.cursor_sx, desktop.cursor_sy,
                           CURSOR_W, CURSOR_H, desktop.cursor_save);
         fb_flip_rect(desktop.cursor_sx, desktop.cursor_sy, CURSOR_W, CURSOR_H);
     }
 
-    // Save new cursor area
     int sx = desktop.mx, sy = desktop.my;
     if (sx + CURSOR_W > (int)fb.width)  sx = fb.width  - CURSOR_W;
     if (sy + CURSOR_H > (int)fb.height) sy = fb.height - CURSOR_H;
@@ -213,13 +262,11 @@ void desktop_update_cursor(void) {
     desktop.cursor_sy = sy;
     desktop.cursor_saved = 1;
 
-    // Draw cursor and blit only cursor rect
     draw_cursor_at(desktop.mx, desktop.my);
     fb_flip_rect(sx, sy, CURSOR_W, CURSOR_H);
 }
 
-void desktop_mouse_move(int dx, int dy, int btn) {
-    // Restore back buffer under old cursor before moving
+void desktop_mouse_move(int dx, int dy, int btn_left, int btn_right) {
     if (desktop.cursor_saved) {
         fb_restore_region(desktop.cursor_sx, desktop.cursor_sy,
                           CURSOR_W, CURSOR_H, desktop.cursor_save);
@@ -232,11 +279,50 @@ void desktop_mouse_move(int dx, int dy, int btn) {
     if (desktop.mx >= (int)fb.width)  desktop.mx = fb.width  - 1;
     if (desktop.my >= (int)fb.height) desktop.my = fb.height - 1;
 
-    int clicked = btn && !desktop.btn_left;
-    desktop.btn_left = btn;
+    // Update menu hover
+    if (ctx_menu.visible) {
+        menu_handle_hover(desktop.mx, desktop.my);
+        desktop.needs_full_redraw = 1;
+    }
 
-    if (clicked) {
-        // Check window titlebar buttons first
+    int left_clicked  = btn_left  && !desktop.btn_left;
+    int right_clicked = btn_right && !desktop.btn_right;
+    desktop.btn_left  = btn_left;
+    desktop.btn_right = btn_right;
+
+    // ── Right click — show context menu ──────────────────────────────────────
+    if (right_clicked) {
+        // Only on desktop background (not on a window)
+        int on_window = 0;
+        for (int i = 0; i < desktop.nwindows; i++) {
+            window_t *w = &desktop.windows[i];
+            if (!w->visible) continue;
+            if (desktop.mx >= w->x && desktop.mx < w->x + w->w &&
+                desktop.my >= w->y && desktop.my < w->y + w->h) {
+                on_window = 1; break;
+            }
+        }
+        if (!on_window) {
+            menu_clear();
+            menu_add_item("New File",   action_new_file);
+            menu_add_item("New Folder", action_new_folder);
+            menu_add_separator();
+            menu_add_item("Refresh",    action_refresh);
+            menu_show(desktop.mx, desktop.my);
+            desktop.needs_full_redraw = 1;
+        }
+    }
+
+    // ── Left click ────────────────────────────────────────────────────────────
+    if (left_clicked) {
+        // Let menu consume click first
+        if (ctx_menu.visible) {
+            menu_handle_click(desktop.mx, desktop.my);
+            desktop.needs_full_redraw = 1;
+            goto done;
+        }
+
+        // Window titlebar buttons
         for (int i = desktop.nwindows - 1; i >= 0; i--) {
             window_t *w = &desktop.windows[i];
             if (!w->visible) continue;
@@ -244,17 +330,17 @@ void desktop_mouse_move(int dx, int dy, int btn) {
             if (hit == BTN_CLOSE) {
                 w->visible = 0;
                 desktop.needs_full_redraw = 1;
-                break;
+                goto done;
             }
             if (hit == BTN_MIN) {
                 w->minimized = !w->minimized;
-                w->visible = !w->minimized;
+                w->visible   = !w->minimized;
                 desktop.needs_full_redraw = 1;
-                break;
+                goto done;
             }
         }
 
-        // Hit test for drag / focus
+        // Drag / focus
         for (int i = desktop.nwindows - 1; i >= 0; i--) {
             window_t *w = &desktop.windows[i];
             if (!w->visible) continue;
@@ -265,32 +351,28 @@ void desktop_mouse_move(int dx, int dy, int btn) {
                 w->drag_ox  = desktop.mx - w->x;
                 w->drag_oy  = desktop.my - w->y;
                 desktop.needs_full_redraw = 1;
-                break;
+                goto done;
             }
         }
     }
 
-    if (!btn) {
-        for (int i = 0; i < desktop.nwindows; i++) {
-            if (desktop.windows[i].dragging) {
-                desktop.windows[i].dragging = 0;
-            }
-        }
+done:
+    if (!btn_left) {
+        for (int i = 0; i < desktop.nwindows; i++)
+            desktop.windows[i].dragging = 0;
     }
 
-    if (btn) {
+    if (btn_left) {
         for (int i = 0; i < desktop.nwindows; i++) {
             window_t *w = &desktop.windows[i];
             if (w->dragging) {
-                int new_x = desktop.mx - w->drag_ox;
-                int new_y = desktop.my - w->drag_oy;
-                if (new_y < 0) new_y = 0;
-                if (new_y + w->h > (int)fb.height - TASKBAR_HEIGHT)
-                    new_y = fb.height - TASKBAR_HEIGHT - w->h;
-                // Only trigger redraw if window actually moved
-                if (new_x != w->x || new_y != w->y) {
-                    w->x = new_x;
-                    w->y = new_y;
+                int nx = desktop.mx - w->drag_ox;
+                int ny = desktop.my - w->drag_oy;
+                if (ny < 0) ny = 0;
+                if (ny + w->h > (int)fb.height - TASKBAR_HEIGHT)
+                    ny = fb.height - TASKBAR_HEIGHT - w->h;
+                if (nx != w->x || ny != w->y) {
+                    w->x = nx; w->y = ny;
                     desktop.needs_full_redraw = 1;
                 }
             }
