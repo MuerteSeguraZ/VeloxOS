@@ -37,7 +37,6 @@ static int shift_held = 0;
 static void mem_cpy(char *d, const char *s, int n) {
     while (n--) *d++=*s++;
 }
-static int str_len(const char *s) { int n=0; while(*s++) n++; return n; }
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
 void window_set_content(window_t *win, const char *text, uint32_t len) {

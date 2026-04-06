@@ -75,6 +75,7 @@ static int load_table(void) {
 
 // ── Find a free contiguous run of sectors starting after existing files ───────
 static uint32_t alloc_sectors(uint32_t count) {
+    (void)count;
     // Find the highest used sector + 1
     uint32_t next = DATA_START;
     for (int i = 0; i < VFS_MAX_FILES; i++) {

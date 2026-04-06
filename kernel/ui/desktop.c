@@ -361,7 +361,8 @@ void desktop_redraw(void){
     int sx=desktop.mx,sy=desktop.my;
     if(sx+CURSOR_W>(int)fb.width)sx=fb.width-CURSOR_W;
     if(sy+CURSOR_H>(int)fb.height)sy=fb.height-CURSOR_H;
-    if(sx<0)sx=0;if(sy<0)sy=0;
+    if(sx<0)sx=0;
+    if(sy<0)sy=0;
     fb_save_region(sx,sy,CURSOR_W,CURSOR_H,desktop.cursor_save);
     desktop.cursor_saved=1;desktop.cursor_sx=sx;desktop.cursor_sy=sy;
     draw_cursor_at(desktop.mx,desktop.my);
@@ -376,7 +377,8 @@ void desktop_update_cursor(void){
     int sx=desktop.mx,sy=desktop.my;
     if(sx+CURSOR_W>(int)fb.width)sx=fb.width-CURSOR_W;
     if(sy+CURSOR_H>(int)fb.height)sy=fb.height-CURSOR_H;
-    if(sx<0)sx=0;if(sy<0)sy=0;
+    if(sx<0)sx=0;
+    if(sy<0)sy=0;
     fb_save_region(sx,sy,CURSOR_W,CURSOR_H,desktop.cursor_save);
     desktop.cursor_sx=sx;desktop.cursor_sy=sy;desktop.cursor_saved=1;
     draw_cursor_at(desktop.mx,desktop.my);
@@ -396,7 +398,8 @@ void desktop_mouse_move(int dx,int dy,int btn_left,int btn_right){
     if(desktop.cursor_saved)
         fb_restore_region(desktop.cursor_sx,desktop.cursor_sy,CURSOR_W,CURSOR_H,desktop.cursor_save);
     desktop.mx+=dx;desktop.my+=dy;
-    if(desktop.mx<0)desktop.mx=0;if(desktop.my<0)desktop.my=0;
+    if(desktop.mx<0)desktop.mx=0;
+    if(desktop.my<0)desktop.my=0;
     if(desktop.mx>=(int)fb.width)desktop.mx=fb.width-1;
     if(desktop.my>=(int)fb.height)desktop.my=fb.height-1;
 
