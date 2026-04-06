@@ -23,6 +23,7 @@ SRCS_C = kernel/kernel.c                  \
          kernel/ui/menu.c                 \
          kernel/ui/input.c                \
          kernel/drivers/mouse/mouse.c     \
+         kernel/drivers/keyboard/keyboard.c \
          kernel/drivers/rtc/rtc.c         \
          kernel/drivers/ata/ata.c         \
          kernel/drivers/bus/bus.c         \

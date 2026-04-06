@@ -81,7 +81,9 @@ void kernel_main(uint32_t mb2_info_phys) {
         pit_wait_tick();
 
         // Keyboard
-        kbd_dispatch();
+        key_event_t evt;
+        while(kbd_poll(&evt))
+            desktop_handle_key(&evt);
 
         // Mouse
         int dx,dy,bl,br;

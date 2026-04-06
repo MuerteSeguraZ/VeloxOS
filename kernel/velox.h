@@ -9,6 +9,7 @@
 #include "ui/menu.h"
 #include "drivers/bus/bus.h"
 #include "drivers/bus/bus_devices.h"
+#include "drivers/keyboard/keyboard.h"
 #include "drivers/mouse/mouse.h"
 #include "drivers/rtc/rtc.h"
 #include "drivers/ata/ata.h"

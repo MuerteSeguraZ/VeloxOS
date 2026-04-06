@@ -1,5 +1,5 @@
 #include "idt.h"
-#include "../ui/desktop.h"
+#include "../drivers/keyboard/keyboard.h"
 
 #define IDT_ENTRIES 256
 #define PIC1_CMD    0x20
@@ -25,36 +25,23 @@ extern void irq_stub_12(void); extern void irq_stub_13(void);
 extern void irq_stub_14(void); extern void irq_stub_15(void);
 
 static void idt_set(int n,uint64_t h){
-    idt[n].offset_low=h&0xFFFF;idt[n].selector=0x08;idt[n].ist=0;
-    idt[n].type_attr=0x8E;idt[n].offset_mid=(h>>16)&0xFFFF;
-    idt[n].offset_high=(h>>32)&0xFFFFFFFF;idt[n].zero=0;
+    idt[n].offset_low=h&0xFFFF; idt[n].selector=0x08; idt[n].ist=0;
+    idt[n].type_attr=0x8E; idt[n].offset_mid=(h>>16)&0xFFFF;
+    idt[n].offset_high=(h>>32)&0xFFFFFFFF; idt[n].zero=0;
 }
 
 static void pic_remap(void){
-    outb(PIC1_CMD,0x11);io_wait();outb(PIC2_CMD,0x11);io_wait();
-    outb(PIC1_DATA,0x20);io_wait();outb(PIC2_DATA,0x28);io_wait();
-    outb(PIC1_DATA,0x04);io_wait();outb(PIC2_DATA,0x02);io_wait();
-    outb(PIC1_DATA,0x01);io_wait();outb(PIC2_DATA,0x01);io_wait();
-    outb(PIC1_DATA,0xF8);  // IRQ0,1,2 unmasked
-    outb(PIC2_DATA,0xEF);  // IRQ12 unmasked
+    outb(PIC1_CMD,0x11);io_wait(); outb(PIC2_CMD,0x11);io_wait();
+    outb(PIC1_DATA,0x20);io_wait(); outb(PIC2_DATA,0x28);io_wait();
+    outb(PIC1_DATA,0x04);io_wait(); outb(PIC2_DATA,0x02);io_wait();
+    outb(PIC1_DATA,0x01);io_wait(); outb(PIC2_DATA,0x01);io_wait();
+    outb(PIC1_DATA,0xF8);   // IRQ0,1,2 unmasked
+    outb(PIC2_DATA,0xEF);   // IRQ12 unmasked
 }
 
-// Pending scancode — set by IRQ1, read by main loop
-static volatile uint8_t pending_scancode = 0;
-static volatile int     has_scancode     = 0;
-
-static void kbd_irq_handler(void){
-    uint8_t sc=inb(0x60);
-    pending_scancode=sc;
-    has_scancode=1;
-}
-
-// Called from kernel main loop to drain and dispatch keyboard input
-void kbd_dispatch(void){
-    if(!has_scancode)return;
-    uint8_t sc=pending_scancode;
-    has_scancode=0;
-    desktop_handle_key(sc);
+static void kbd_irq_handler(void) {
+    uint8_t sc = inb(0x60);
+    kbd_enqueue_scancode(sc);
 }
 
 void idt_init(void){
@@ -66,17 +53,19 @@ void idt_init(void){
     idt_set(0x2A,(uint64_t)irq_stub_10); idt_set(0x2B,(uint64_t)irq_stub_11);
     idt_set(0x2C,(uint64_t)irq_stub_12); idt_set(0x2D,(uint64_t)irq_stub_13);
     idt_set(0x2E,(uint64_t)irq_stub_14); idt_set(0x2F,(uint64_t)irq_stub_15);
-    idt_ptr.limit=sizeof(idt)-1;idt_ptr.base=(uint64_t)&idt;
+    idt_ptr.limit=sizeof(idt)-1; idt_ptr.base=(uint64_t)&idt;
     pic_remap();
-    irq_register(1,kbd_irq_handler);
+    irq_register(1, kbd_irq_handler);
     __asm__ volatile("lidt %0"::"m"(idt_ptr));
     __asm__ volatile("sti");
 }
 
-void irq_register(int irq,irq_handler_t handler){if(irq>=0&&irq<16)irq_handlers[irq]=handler;}
+void irq_register(int irq,irq_handler_t handler){
+    if(irq>=0&&irq<16) irq_handlers[irq]=handler;
+}
 
 void irq_dispatch(int irq){
-    if(irq_handlers[irq])irq_handlers[irq]();
-    if(irq>=8)outb(PIC2_CMD,0x20);
+    if(irq_handlers[irq]) irq_handlers[irq]();
+    if(irq>=8) outb(PIC2_CMD,0x20);
     outb(PIC1_CMD,0x20);
 }

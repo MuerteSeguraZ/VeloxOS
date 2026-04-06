@@ -386,10 +386,11 @@ void desktop_update_cursor(void){
 }
 
 // ── Keyboard routing (called from kernel main loop) ───────────────────────────
-void desktop_handle_key(uint8_t scancode){
-    if(input_box.visible){input_handle_key(scancode);input_box.dirty=1;return;}
+void desktop_handle_key(const key_event_t *evt){
+    if(!evt || !evt->pressed) return;
+    if(input_box.visible){input_handle_key(evt);input_box.dirty=1;return;}
     if(desktop.active_win){
-        if(window_handle_key(desktop.active_win->win,scancode))
+        if(window_handle_key(desktop.active_win->win,evt))
             desktop.needs_full_redraw=1;
     }
 }

@@ -3,6 +3,7 @@
 #include "window.h"
 #include "menu.h"
 #include "input.h"
+#include "../drivers/keyboard/keyboard.h"
 
 #define TASKBAR_HEIGHT  32
 
@@ -42,4 +43,4 @@ window_node_t *desktop_add_window(int x, int y, int w, int h, const char *title)
 void desktop_redraw(void);
 void desktop_update_cursor(void);
 void desktop_mouse_move(int dx, int dy, int btn_left, int btn_right);
-void desktop_handle_key(uint8_t scancode);
+void desktop_handle_key(const key_event_t *evt);

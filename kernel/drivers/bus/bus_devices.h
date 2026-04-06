@@ -23,3 +23,6 @@ static inline int rtc_bus_init(void) {
 }
 
 #define rtc_bus_probe NULL
+
+static inline int kbd_bus_init(void) { kbd_init(); return 1; }
+#define kbd_bus_probe NULL
