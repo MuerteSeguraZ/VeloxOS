@@ -25,6 +25,7 @@ SRCS_C = kernel/kernel.c                  \
          kernel/drivers/mouse.c           \
          kernel/drivers/rtc.c             \
          kernel/drivers/ata.c             \
+         kernel/drivers/bus.c             \
          kernel/fs/fs.c                   \
          kernel/arch/idt.c                \
          kernel/arch/pit.c

@@ -7,6 +7,8 @@
 #include "ui/window.h"
 #include "ui/input.h"
 #include "ui/menu.h"
+#include "drivers/bus.h"
+#include "drivers/bus_devices.h"
 #include "drivers/mouse.h"
 #include "drivers/rtc.h"
 #include "drivers/ata.h"

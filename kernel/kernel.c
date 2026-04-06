@@ -38,9 +38,18 @@ void kernel_main(uint32_t mb2_info_phys) {
     fb_init(fb_addr,fb_pitch,fb_width,fb_height,fb_bpp,backbuf);
     idt_init();
     pit_init(60);
-    mouse_init();
 
-    ata_init();
+    // ── Register devices to bus ─────────────────────────────────────────────
+    bus_register("ata-primary",   "storage", ata_bus_probe, ata_bus_init);
+    bus_register("ata-secondary", "storage", ata_bus_probe, ata_bus_init);
+    bus_register("mouse-ps2",     "input",   mouse_bus_probe, mouse_bus_init);
+    bus_register("rtc-cmos",      "rtc",     rtc_bus_probe, rtc_bus_init);
+
+    // ── Enumerate devices (probe + initialize) ──────────────────────────────
+    int devices_init = bus_enumerate();
+    (void)devices_init;  // Suppress unused warning
+
+    // ── Find and mount filesystem ───────────────────────────────────────────
     ata_drive_t *disk=0; int found_bus=-1,found_drv=-1;
     for(int b=0;b<=1&&!disk;b++)for(int d=0;d<=1&&!disk;d++){
         ata_drive_t *c=ata_get_drive(b,d);if(c->present){disk=c;found_bus=b;found_drv=d;}
@@ -59,6 +68,7 @@ void kernel_main(uint32_t mb2_info_phys) {
         }
     }
 
+    // ── Initialize UI ───────────────────────────────────────────────────────
     desktop_init();
     desktop_add_window(80,60,340,220,fs_ok?"Welcome - Disk OK":"Welcome - No Disk");
     desktop_add_window(450,130,300,200,"About Velox");
@@ -66,6 +76,7 @@ void kernel_main(uint32_t mb2_info_phys) {
 
     uint64_t last_clock_tick=0;
 
+    // ── Main event loop ─────────────────────────────────────────────────────
     while(1){
         pit_wait_tick();
 
