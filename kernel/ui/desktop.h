@@ -15,24 +15,30 @@
 #define COL_CLOCK           0xc0d8f0
 #define COL_TRAY_BG         0x111122
 
+// Window node for linked list
+typedef struct window_node {
+    window_t *win;
+    struct window_node *next;
+} window_node_t;
+
 typedef struct {
-    window_t windows[MAX_WINDOWS];
-    int      nwindows;
-    int      active_win;
-    int      mx, my;
-    int      btn_left, btn_right;
-    uint32_t cursor_save[CURSOR_W * CURSOR_H];
-    int      cursor_saved;
-    int      cursor_sx, cursor_sy;
-    int      dirty;
-    int      needs_full_redraw;
-    int      selected_icon;
+    window_node_t *windows;     // Head of linked list
+    int           nwindows;     // Count of windows (for quick access)
+    window_node_t *active_win;  // Pointer to active window node (instead of index)
+    int           mx, my;
+    int           btn_left, btn_right;
+    uint32_t      cursor_save[CURSOR_W * CURSOR_H];
+    int           cursor_saved;
+    int           cursor_sx, cursor_sy;
+    int           dirty;
+    int           needs_full_redraw;
+    int           selected_icon;
 } desktop_t;
 
 extern desktop_t desktop;
 
 void desktop_init(void);
-int  desktop_add_window(int x, int y, int w, int h, const char *title);
+window_node_t *desktop_add_window(int x, int y, int w, int h, const char *title);
 void desktop_redraw(void);
 void desktop_update_cursor(void);
 void desktop_mouse_move(int dx, int dy, int btn_left, int btn_right);

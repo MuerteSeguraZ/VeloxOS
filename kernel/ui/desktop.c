@@ -46,55 +46,77 @@ static int icon_at(int mx,int my){
 }
 
 // ── Pending close (for unsaved changes dialog) ────────────────────────────────
-static int pending_close_win = -1;   // window index waiting for save decision
+static window_node_t *pending_close_node = NULL;
 
-static void do_close_window(int idx){
-    if(idx<0||idx>=desktop.nwindows)return;
-    desktop.windows[idx].visible=0;
-    desktop.windows[idx].edit_dirty=0;
-    if(desktop.active_win==idx) desktop.active_win=-1;
+static void do_close_window(window_node_t *node){
+    if(!node)return;
+    
+    // Unlink from list
+    if(desktop.windows == node){
+        desktop.windows = node->next;
+    } else {
+        window_node_t *curr = desktop.windows;
+        while(curr && curr->next != node) curr = curr->next;
+        if(curr) curr->next = node->next;
+    }
+    
+    // Update active_win if needed
+    if(desktop.active_win == node) desktop.active_win = NULL;
+    
+    // Free the window and node
+    mm_free(node->win);
+    mm_free(node);
+    
+    desktop.nwindows--;
     desktop.needs_full_redraw=1;
 }
 
 // YNC callbacks
 static void on_save_yes(const char *text, void *ud){
     (void)text;
-    int idx=(int)(uint64_t)ud;
-    window_t *w=&desktop.windows[idx];
+    window_node_t *node = (window_node_t *)ud;
+    if(!node || !node->win) return;
+    
+    window_t *w = node->win;
     if(w->fs_idx>=0){
         uint32_t len=0; while(w->edit_buf[len])len++;
         vfs_write(w->fs_idx,w->edit_buf,len);
     }
-    do_close_window(idx);
+    do_close_window(node);
 }
+
 static void on_save_no(void *ud){
-    int idx=(int)(uint64_t)ud;
-    // Revert edit_buf to orig_buf
-    window_t *w=&desktop.windows[idx];
+    window_node_t *node = (window_node_t *)ud;
+    if(!node || !node->win) return;
+    
+    window_t *w = node->win;
     int i=0;
     while(w->orig_buf[i]){w->edit_buf[i]=w->orig_buf[i];i++;}
     w->edit_buf[i]=0; w->edit_len=i; w->edit_dirty=0;
-    do_close_window(idx);
+    do_close_window(node);
 }
+
 static void on_save_cancel(void *ud){
     (void)ud;
-    pending_close_win=-1;
+    pending_close_node=NULL;
     desktop.needs_full_redraw=1;
 }
 
-static void try_close_window(int idx){
-    window_t *w=&desktop.windows[idx];
+static void try_close_window(window_node_t *node){
+    if(!node || !node->win) return;
+    
+    window_t *w = node->win;
     if(w->editable && w->edit_dirty){
-        pending_close_win=idx;
+        pending_close_node = node;
         input_show_ync("Unsaved Changes",
                        "Save before closing?",
                        on_save_yes,
                        on_save_no,
                        on_save_cancel,
-                       (void*)(uint64_t)idx);
+                       (void*)node);
         desktop.needs_full_redraw=1;
     } else {
-        do_close_window(idx);
+        do_close_window(node);
     }
 }
 
@@ -104,29 +126,30 @@ static void open_entry(int fs_idx){
     if(!e->used)return;
 
     // Already open?
-    for(int i=0;i<desktop.nwindows;i++){
-        window_t *w=&desktop.windows[i];
+    for(window_node_t *node=desktop.windows; node; node=node->next){
+        window_t *w = node->win;
         int m=1;
         for(int j=0;j<TITLE_MAX;j++){if(w->title[j]!=e->name[j]){m=0;break;}if(!w->title[j])break;}
-        if(m&&w->visible){desktop.active_win=i;desktop.needs_full_redraw=1;return;}
+        if(m&&w->visible){desktop.active_win=node;desktop.needs_full_redraw=1;return;}
     }
 
     if(e->is_dir){
-        desktop_add_window(120,80,300,180,e->name);
-        window_set_content(&desktop.windows[desktop.nwindows-1],"(Empty folder)",14);
+        window_node_t *node = desktop_add_window(120,80,300,180,e->name);
+        if(node)
+            window_set_content(node->win,"(Empty folder)",14);
     } else {
-        int idx=desktop_add_window(120,80,400,280,e->name);
-        if(idx>=0){
+        window_node_t *node = desktop_add_window(120,80,400,280,e->name);
+        if(node){
             if(e->size_bytes>0){
                 void *buf=mm_alloc(e->size_bytes+1);
                 if(buf){
                     uint32_t n=vfs_read(fs_idx,buf);
                     ((char*)buf)[n]=0;
-                    window_set_editable(&desktop.windows[idx],(char*)buf,n,fs_idx);
+                    window_set_editable(node->win,(char*)buf,n,fs_idx);
                     mm_free(buf);
                 }
             } else {
-                window_set_editable(&desktop.windows[idx],"",0,fs_idx);
+                window_set_editable(node->win,"",0,fs_idx);
             }
         }
     }
@@ -177,8 +200,8 @@ static void action_rename(void){
 }
 static void action_delete(void){
     if(menu_icon_target<0)return;
-    for(int i=0;i<desktop.nwindows;i++){
-        window_t *w=&desktop.windows[i];
+    for(window_node_t *node=desktop.windows; node; node=node->next){
+        window_t *w = node->win;
         int m=1;
         for(int j=0;j<TITLE_MAX;j++){if(w->title[j]!=vfs.entries[menu_icon_target].name[j]){m=0;break;}if(!w->title[j])break;}
         if(m)w->visible=0;
@@ -251,10 +274,10 @@ static void draw_taskbar(void){
     fb_draw_rect(6,by,56,bh,0x7aafdf);
     text_puts_centered(6,by+(bh-8)/2,56,"Velox",0xffffff,0,1);
     int wx=70;
-    for(int i=0;i<desktop.nwindows;i++){
-        window_t *w=&desktop.windows[i];
+    for(window_node_t *node=desktop.windows; node; node=node->next){
+        window_t *w = node->win;
         if(!w->visible&&!w->minimized)continue;
-        int active=(i==desktop.active_win);
+        int active=(node==desktop.active_win);
         fb_fill_rect(wx,by,110,bh,active?COL_TASKBAR_BTN_ACT:COL_TASKBAR_BTN);
         fb_draw_rect(wx,by,110,bh,active?COL_TASKBAR_BORDER:0x2a3a5a);
         if(active)fb_fill_rect(wx+2,by+bh-3,106,2,COL_TASKBAR_BORDER);
@@ -281,7 +304,9 @@ static void draw_cursor_at(int mx,int my){
 
 // ── Public API ────────────────────────────────────────────────────────────────
 void desktop_init(void){
-    desktop.nwindows=0;desktop.active_win=-1;
+    desktop.windows=NULL;
+    desktop.nwindows=0;
+    desktop.active_win=NULL;
     desktop.mx=fb.width/2;desktop.my=fb.height/2;
     desktop.btn_left=0;desktop.btn_right=0;
     desktop.dirty=1;desktop.needs_full_redraw=1;
@@ -289,24 +314,49 @@ void desktop_init(void){
     menu_clear();
 }
 
-int desktop_add_window(int x,int y,int w,int h,const char *title){
-    if(desktop.nwindows>=MAX_WINDOWS)return -1;
-    int idx=desktop.nwindows++;
-    window_t *win=&desktop.windows[idx];
+window_node_t *desktop_add_window(int x,int y,int w,int h,const char *title){
+    // Allocate window
+    window_t *win = (window_t *)mm_alloc(sizeof(window_t));
+    if(!win) return NULL;
+    
+    // Allocate node
+    window_node_t *node = (window_node_t *)mm_alloc(sizeof(window_node_t));
+    if(!node){mm_free(win); return NULL;}
+    
+    // Initialize window
     win->x=x;win->y=y;win->w=w;win->h=h;
     win->visible=1;win->minimized=0;win->dragging=0;
     win->has_content=0;win->content[0]=0;
     win->editable=0;win->edit_dirty=0;win->edit_len=0;
     win->fs_idx=-1;win->scroll_row=0;
     int i=0;while(title[i]&&i<TITLE_MAX-1){win->title[i]=title[i];i++;}win->title[i]=0;
-    desktop.active_win=idx;desktop.needs_full_redraw=1;
-    return idx;
+    
+    // Append to list
+    node->win = win;
+    node->next = NULL;
+    
+    if(!desktop.windows){
+        desktop.windows = node;
+    } else {
+        window_node_t *curr = desktop.windows;
+        while(curr->next) curr = curr->next;
+        curr->next = node;
+    }
+    
+    desktop.nwindows++;
+    desktop.active_win = node;
+    desktop.needs_full_redraw=1;
+    
+    return node;
 }
 
 void desktop_redraw(void){
     draw_wallpaper();draw_icons();
-    for(int i=0;i<desktop.nwindows;i++)
-        window_draw(&desktop.windows[i],i==desktop.active_win);
+    
+    // Draw all windows
+    for(window_node_t *node=desktop.windows; node; node=node->next)
+        window_draw(node->win, node==desktop.active_win);
+    
     draw_taskbar();menu_draw();input_draw();
     int sx=desktop.mx,sy=desktop.my;
     if(sx+CURSOR_W>(int)fb.width)sx=fb.width-CURSOR_W;
@@ -336,9 +386,8 @@ void desktop_update_cursor(void){
 // ── Keyboard routing (called from kernel main loop) ───────────────────────────
 void desktop_handle_key(uint8_t scancode){
     if(input_box.visible){input_handle_key(scancode);input_box.dirty=1;return;}
-    if(desktop.active_win>=0&&desktop.active_win<desktop.nwindows){
-        window_t *w=&desktop.windows[desktop.active_win];
-        if(window_handle_key(w,scancode))
+    if(desktop.active_win){
+        if(window_handle_key(desktop.active_win->win,scancode))
             desktop.needs_full_redraw=1;
     }
 }
@@ -371,7 +420,11 @@ void desktop_mouse_move(int dx,int dy,int btn_left,int btn_right){
         } else {
             menu_icon_target=-1;
             int ow=0;
-            for(int i=0;i<desktop.nwindows;i++){window_t *w=&desktop.windows[i];if(!w->visible)continue;if(desktop.mx>=w->x&&desktop.mx<w->x+w->w&&desktop.my>=w->y&&desktop.my<w->y+w->h){ow=1;break;}}
+            for(window_node_t *node=desktop.windows; node; node=node->next){
+                window_t *w=node->win;
+                if(!w->visible)continue;
+                if(desktop.mx>=w->x&&desktop.mx<w->x+w->w&&desktop.my>=w->y&&desktop.my<w->y+w->h){ow=1;break;}
+            }
             if(!ow){menu_add_item("New File",action_new_file);menu_add_item("New Folder",action_new_folder);menu_add_separator();menu_add_item("Refresh",action_refresh);}
         }
         if(ctx_menu.nitems>0)menu_show(desktop.mx,desktop.my);
@@ -383,20 +436,28 @@ void desktop_mouse_move(int dx,int dy,int btn_left,int btn_right){
         if(input_box.visible){input_handle_click(desktop.mx,desktop.my);desktop.needs_full_redraw=1;goto done;}
         if(ctx_menu.visible){menu_handle_click(desktop.mx,desktop.my);desktop.needs_full_redraw=1;goto done;}
 
-        // Window buttons
-        for(int i=desktop.nwindows-1;i>=0;i--){
-            window_t *w=&desktop.windows[i];if(!w->visible)continue;
+        // Window buttons (check all windows)
+        window_node_t *topmost=NULL;
+        for(window_node_t *node=desktop.windows; node; node=node->next){
+            window_t *w=node->win;
+            if(!w->visible)continue;
             int hit=window_hit_button(w,desktop.mx,desktop.my);
-            if(hit==BTN_CLOSE){try_close_window(i);goto done;}
+            if(hit){topmost=node; break;}
+        }
+        if(topmost){
+            window_t *w=topmost->win;
+            int hit=window_hit_button(w,desktop.mx,desktop.my);
+            if(hit==BTN_CLOSE){try_close_window(topmost);goto done;}
             if(hit==BTN_MIN){w->minimized=!w->minimized;w->visible=!w->minimized;desktop.needs_full_redraw=1;goto done;}
         }
 
-        // Window drag/focus
+        // Window drag/focus (check all windows, first match wins)
         int cw=0;
-        for(int i=desktop.nwindows-1;i>=0;i--){
-            window_t *w=&desktop.windows[i];if(!w->visible)continue;
+        for(window_node_t *node=desktop.windows; node; node=node->next){
+            window_t *w=node->win;
+            if(!w->visible)continue;
             if(desktop.mx>=w->x&&desktop.mx<w->x+w->w&&desktop.my>=w->y&&desktop.my<w->y+w->h){
-                desktop.active_win=i;cw=1;
+                desktop.active_win=node;cw=1;
                 if(desktop.my<w->y+TITLEBAR_HEIGHT){w->dragging=1;w->drag_ox=desktop.mx-w->x;w->drag_oy=desktop.my-w->y;}
                 desktop.needs_full_redraw=1;goto done;
             }
@@ -412,10 +473,13 @@ void desktop_mouse_move(int dx,int dy,int btn_left,int btn_right){
     }
 
 done:
-    if(!btn_left)for(int i=0;i<desktop.nwindows;i++)desktop.windows[i].dragging=0;
+    if(!btn_left)for(window_node_t *node=desktop.windows; node; node=node->next)
+        node->win->dragging=0;
+    
     if(btn_left){
-        for(int i=0;i<desktop.nwindows;i++){
-            window_t *w=&desktop.windows[i];if(!w->dragging)continue;
+        for(window_node_t *node=desktop.windows; node; node=node->next){
+            window_t *w=node->win;
+            if(!w->dragging)continue;
             int nx=desktop.mx-w->drag_ox,ny=desktop.my-w->drag_oy;
             if(ny<0)ny=0;
             if(ny+w->h>(int)fb.height-TASKBAR_HEIGHT)ny=fb.height-TASKBAR_HEIGHT-w->h;
