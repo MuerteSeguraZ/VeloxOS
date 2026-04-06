@@ -1,5 +1,5 @@
 #include "fs.h"
-#include "../drivers/ata.h"
+#include "../drivers/ata/ata.h"
 
 vfs_t vfs;
 

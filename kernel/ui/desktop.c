@@ -3,7 +3,7 @@
 #include "input.h"
 #include "../graphics/framebuffer.h"
 #include "../graphics/text.h"
-#include "../drivers/rtc.h"
+#include "../drivers/rtc/rtc.h"
 #include "../fs/fs.h"
 #include "../mm/alloc.h"
 

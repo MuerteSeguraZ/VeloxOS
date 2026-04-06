@@ -1,5 +1,5 @@
 #pragma once
-#include "../stdint.h"
+#include "../../stdint.h"
 
 typedef int (*bus_probe_fn)(void);
 

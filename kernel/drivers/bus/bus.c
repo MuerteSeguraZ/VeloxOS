@@ -1,5 +1,5 @@
 #include "bus.h"
-#include "../graphics/text.h"
+#include "../../graphics/text.h"
 
 #define MAX_DEVICES 32
 

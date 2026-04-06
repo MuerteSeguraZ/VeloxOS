@@ -1,5 +1,5 @@
 #pragma once
-#include "../stdint.h"
+#include "../../stdint.h"
 
 // ATA drive info
 typedef struct {

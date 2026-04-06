@@ -1,5 +1,9 @@
 #pragma once
 
+#include "../ata/ata.h"
+#include "../mouse/mouse.h"
+#include "../rtc/rtc.h"
+
 static inline int ata_bus_init(void) {
     ata_init();
     return 1;
