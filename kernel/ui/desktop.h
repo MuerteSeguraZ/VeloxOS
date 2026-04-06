@@ -2,6 +2,7 @@
 #include "../stdint.h"
 #include "window.h"
 #include "menu.h"
+#include "input.h"
 
 #define TASKBAR_HEIGHT  32
 
@@ -18,19 +19,14 @@ typedef struct {
     window_t windows[MAX_WINDOWS];
     int      nwindows;
     int      active_win;
-
     int      mx, my;
-    int      btn_left;
-    int      btn_right;
-
+    int      btn_left, btn_right;
     uint32_t cursor_save[CURSOR_W * CURSOR_H];
     int      cursor_saved;
     int      cursor_sx, cursor_sy;
-
     int      dirty;
     int      needs_full_redraw;
-
-    int      selected_icon;    // fs entry index, -1 = none
+    int      selected_icon;
 } desktop_t;
 
 extern desktop_t desktop;
@@ -40,3 +36,4 @@ int  desktop_add_window(int x, int y, int w, int h, const char *title);
 void desktop_redraw(void);
 void desktop_update_cursor(void);
 void desktop_mouse_move(int dx, int dy, int btn_left, int btn_right);
+void desktop_handle_key(uint8_t scancode);

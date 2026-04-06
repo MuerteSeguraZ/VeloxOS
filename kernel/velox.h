@@ -1,0 +1,16 @@
+#pragma once
+
+#include "stdint.h"
+#include "graphics/framebuffer.h"
+#include "graphics/text.h"
+#include "ui/desktop.h"
+#include "ui/window.h"
+#include "ui/input.h"
+#include "ui/menu.h"
+#include "drivers/mouse.h"
+#include "drivers/rtc.h"
+#include "drivers/ata.h"
+#include "arch/idt.h"
+#include "arch/pit.h"
+#include "mm/alloc.h"
+#include "fs/fs.h"

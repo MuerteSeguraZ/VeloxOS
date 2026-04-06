@@ -21,3 +21,4 @@ typedef void (*irq_handler_t)(void);
 void idt_init(void);
 void irq_register(int irq, irq_handler_t handler);
 void irq_dispatch(int irq);
+void kbd_dispatch(void);
