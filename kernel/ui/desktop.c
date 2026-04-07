@@ -32,13 +32,35 @@ static const uint8_t cursor_bmp[CURSOR_H][CURSOR_W]={
 #define ICON_GRID_X  16
 #define ICON_GRID_Y  16
 
+// Tracks which parent context the current selection is in.
+// VFS_ROOT_PARENT(-1) = desktop, >=0 = inside that folder window.
+// Prevents the same VFS index owned by different parents from
+// falsely triggering a double-click open.
+static int selected_icon_ctx = VFS_ROOT_PARENT;
+
 static int icon_at(int mx,int my){
     if(!vfs.mounted)return -1;
     int mc=(fb.width-ICON_GRID_X*2)/ICON_CELL_W; if(mc<1)mc=1;
     int col=0,row=0,slot=0;
     for(int i=0;i<VFS_MAX_FILES;i++){
         if(!vfs.entries[i].used)continue;
+        if((int)vfs.entries[i].parent_idx!=VFS_ROOT_PARENT)continue;
         int ix=ICON_GRID_X+col*ICON_CELL_W,iy=ICON_GRID_Y+row*ICON_CELL_H;
+        if(mx>=ix&&mx<ix+ICON_W&&my>=iy&&my<iy+ICON_H+ICON_LABEL_H)return i;
+        slot++;col=slot%mc;row=slot/mc;
+    }
+    return -1;
+}
+
+static int icon_at_in_folder(int mx,int my,int wx,int wy,int ww,int parent_idx){
+    if(!vfs.mounted)return -1;
+    int mc=(ww-ICON_GRID_X*2)/ICON_CELL_W; if(mc<1)mc=1;
+    int col=0,row=0,slot=0;
+    for(int i=0;i<VFS_MAX_FILES;i++){
+        if(!vfs.entries[i].used)continue;
+        if((int)vfs.entries[i].parent_idx!=parent_idx)continue;
+        int ix=wx+ICON_GRID_X+col*ICON_CELL_W;
+        int iy=wy+TITLEBAR_HEIGHT+ICON_GRID_Y+row*ICON_CELL_H;
         if(mx>=ix&&mx<ix+ICON_W&&my>=iy&&my<iy+ICON_H+ICON_LABEL_H)return i;
         slot++;col=slot%mc;row=slot/mc;
     }
@@ -50,8 +72,6 @@ static window_node_t *pending_close_node = NULL;
 
 static void do_close_window(window_node_t *node){
     if(!node)return;
-    
-    // Unlink from list
     if(desktop.windows == node){
         desktop.windows = node->next;
     } else {
@@ -59,24 +79,17 @@ static void do_close_window(window_node_t *node){
         while(curr && curr->next != node) curr = curr->next;
         if(curr) curr->next = node->next;
     }
-    
-    // Update active_win if needed
     if(desktop.active_win == node) desktop.active_win = NULL;
-    
-    // Free the window and node
     mm_free(node->win);
     mm_free(node);
-    
     desktop.nwindows--;
     desktop.needs_full_redraw=1;
 }
 
-// YNC callbacks
 static void on_save_yes(const char *text, void *ud){
     (void)text;
     window_node_t *node = (window_node_t *)ud;
     if(!node || !node->win) return;
-    
     window_t *w = node->win;
     if(w->fs_idx>=0){
         uint32_t len=0; while(w->edit_buf[len])len++;
@@ -88,7 +101,6 @@ static void on_save_yes(const char *text, void *ud){
 static void on_save_no(void *ud){
     window_node_t *node = (window_node_t *)ud;
     if(!node || !node->win) return;
-    
     window_t *w = node->win;
     int i=0;
     while(w->orig_buf[i]){w->edit_buf[i]=w->orig_buf[i];i++;}
@@ -104,7 +116,6 @@ static void on_save_cancel(void *ud){
 
 static void try_close_window(window_node_t *node){
     if(!node || !node->win) return;
-    
     window_t *w = node->win;
     if(w->editable && w->edit_dirty){
         pending_close_node = node;
@@ -134,9 +145,9 @@ static void open_entry(int fs_idx){
     }
 
     if(e->is_dir){
-        window_node_t *node = desktop_add_window(120,80,300,180,e->name);
+        window_node_t *node = desktop_add_window(120,80,340,240,e->name);
         if(node)
-            window_set_content(node->win,"(Empty folder)",14);
+            window_set_folder(node->win, fs_idx);
     } else {
         window_node_t *node = desktop_add_window(120,80,400,280,e->name);
         if(node){
@@ -179,6 +190,25 @@ static void action_refresh(void){desktop.needs_full_redraw=1;}
 
 static int menu_icon_target=-1;
 static void action_open(void){if(menu_icon_target>=0)open_entry(menu_icon_target);}
+
+// ── Folder-scoped "New File" / "New Folder" ───────────────────────────────────
+static int active_folder_idx=-1;
+
+static void action_new_file_in_folder(void){
+    if(!vfs.mounted||active_folder_idx<0)return;
+    char name[32];char num[4];itoa2(++file_counter,num);
+    int i=0;const char *p="File ";while(*p)name[i++]=*p++;
+    int j=0;while(num[j])name[i++]=num[j++];
+    name[i++]='.';name[i++]='t';name[i++]='x';name[i++]='t';name[i]=0;
+    vfs_create_in(name,0,active_folder_idx);desktop.needs_full_redraw=1;
+}
+static void action_new_folder_in_folder(void){
+    if(!vfs.mounted||active_folder_idx<0)return;
+    char name[32];char num[4];itoa2(++folder_counter,num);
+    int i=0;const char *p="Folder ";while(*p)name[i++]=*p++;
+    int j=0;while(num[j])name[i++]=num[j++];name[i]=0;
+    vfs_create_in(name,1,active_folder_idx);desktop.needs_full_redraw=1;
+}
 
 static int rename_target=-1;
 static void on_rename_confirm(const char *text,void *ud){
@@ -231,15 +261,58 @@ static void draw_wallpaper(void){
     }
 }
 
+// Draw icons that belong to a specific folder window
+static void draw_folder_icons(int wx,int wy,int ww,int parent_idx){
+    if(!vfs.mounted)return;
+    int mc=(ww-ICON_GRID_X*2)/ICON_CELL_W; if(mc<1)mc=1;
+    int col=0,row=0,slot=0;
+    for(int i=0;i<VFS_MAX_FILES;i++){
+        if(!vfs.entries[i].used)continue;
+        if((int)vfs.entries[i].parent_idx!=parent_idx)continue;
+        vfs_entry_t *e=&vfs.entries[i];
+        int ix=wx+ICON_GRID_X+col*ICON_CELL_W;
+        int iy=wy+TITLEBAR_HEIGHT+ICON_GRID_Y+row*ICON_CELL_H;
+        if(i==desktop.selected_icon && selected_icon_ctx==parent_idx){
+            fb_fill_rect(ix-2,iy-2,ICON_W+4,ICON_H+ICON_LABEL_H+4,0x2a4a7a);
+            fb_draw_rect(ix-2,iy-2,ICON_W+4,ICON_H+ICON_LABEL_H+4,0x4a7fa5);
+        }
+        if(e->is_dir){
+            fb_fill_rect(ix,iy+6,ICON_W,ICON_H-6,0x4a7fa5);
+            fb_fill_rect(ix,iy+3,ICON_W/3,6,0x5a8fbf);
+            fb_draw_rect(ix,iy+6,ICON_W,ICON_H-6,0x6aafdf);
+        } else {
+            fb_fill_rect(ix,iy,ICON_W-10,ICON_H,0x2a5a3a);
+            fb_fill_rect(ix+ICON_W-10,iy+10,10,ICON_H-10,0x2a5a3a);
+            fb_fill_rect(ix+ICON_W-10,iy,10,10,0x1a3a2a);
+            fb_draw_hline(ix+ICON_W-10,iy+10,10,0x4a9a6a);
+            fb_draw_vline(ix+ICON_W-10,iy,10,0x4a9a6a);
+            fb_draw_hline(ix+6,iy+14,ICON_W-20,0x4a9a6a);
+            fb_draw_hline(ix+6,iy+20,ICON_W-20,0x3a7a5a);
+            fb_draw_hline(ix+6,iy+26,ICON_W-20,0x3a7a5a);
+            fb_draw_rect(ix,iy,ICON_W-10,ICON_H,0x4a9a6a);
+        }
+        char label[16];int li=0;
+        while(e->name[li]&&li<9){label[li]=e->name[li];li++;}
+        if(e->name[li]){label[li++]='.';label[li++]='.';}label[li]=0;
+        int lw=text_strlen(label)*(8+1);
+        text_puts(ix+(ICON_W-lw)/2,iy+ICON_H+2,label,0xd8e8f8,0,1);
+        slot++;col=slot%mc;row=slot/mc;
+    }
+}
+
 static void draw_icons(void){
     if(!vfs.mounted)return;
     int mc=(fb.width-ICON_GRID_X*2)/ICON_CELL_W;if(mc<1)mc=1;
     int col=0,row=0,slot=0;
     for(int i=0;i<VFS_MAX_FILES;i++){
         if(!vfs.entries[i].used)continue;
+        if((int)vfs.entries[i].parent_idx!=VFS_ROOT_PARENT)continue;
         vfs_entry_t *e=&vfs.entries[i];
         int ix=ICON_GRID_X+col*ICON_CELL_W,iy=ICON_GRID_Y+row*ICON_CELL_H;
-        if(i==desktop.selected_icon){fb_fill_rect(ix-2,iy-2,ICON_W+4,ICON_H+ICON_LABEL_H+4,0x2a4a7a);fb_draw_rect(ix-2,iy-2,ICON_W+4,ICON_H+ICON_LABEL_H+4,0x4a7fa5);}
+        if(i==desktop.selected_icon && selected_icon_ctx==VFS_ROOT_PARENT){
+            fb_fill_rect(ix-2,iy-2,ICON_W+4,ICON_H+ICON_LABEL_H+4,0x2a4a7a);
+            fb_draw_rect(ix-2,iy-2,ICON_W+4,ICON_H+ICON_LABEL_H+4,0x4a7fa5);
+        }
         if(e->is_dir){
             fb_fill_rect(ix,iy+6,ICON_W,ICON_H-6,0x4a7fa5);
             fb_fill_rect(ix,iy+3,ICON_W/3,6,0x5a8fbf);
@@ -311,30 +384,24 @@ void desktop_init(void){
     desktop.btn_left=0;desktop.btn_right=0;
     desktop.dirty=1;desktop.needs_full_redraw=1;
     desktop.cursor_saved=0;desktop.selected_icon=-1;
+    selected_icon_ctx=VFS_ROOT_PARENT;
     menu_clear();
 }
 
 window_node_t *desktop_add_window(int x,int y,int w,int h,const char *title){
-    // Allocate window
     window_t *win = (window_t *)mm_alloc(sizeof(window_t));
     if(!win) return NULL;
-    
-    // Allocate node
     window_node_t *node = (window_node_t *)mm_alloc(sizeof(window_node_t));
     if(!node){mm_free(win); return NULL;}
-    
-    // Initialize window
     win->x=x;win->y=y;win->w=w;win->h=h;
     win->visible=1;win->minimized=0;win->dragging=0;
     win->has_content=0;win->content[0]=0;
     win->editable=0;win->edit_dirty=0;win->edit_len=0;
+    win->folder_idx=-1;
     win->fs_idx=-1;win->scroll_row=0;
     int i=0;while(title[i]&&i<TITLE_MAX-1){win->title[i]=title[i];i++;}win->title[i]=0;
-    
-    // Append to list
     node->win = win;
     node->next = NULL;
-    
     if(!desktop.windows){
         desktop.windows = node;
     } else {
@@ -342,21 +409,22 @@ window_node_t *desktop_add_window(int x,int y,int w,int h,const char *title){
         while(curr->next) curr = curr->next;
         curr->next = node;
     }
-    
     desktop.nwindows++;
     desktop.active_win = node;
     desktop.needs_full_redraw=1;
-    
     return node;
 }
 
 void desktop_redraw(void){
-    draw_wallpaper();draw_icons();
-    
-    // Draw all windows
-    for(window_node_t *node=desktop.windows; node; node=node->next)
+    draw_wallpaper();
+    draw_icons();
+    // Draw each window; folder windows also get their child icons drawn on top
+    for(window_node_t *node=desktop.windows; node; node=node->next){
         window_draw(node->win, node==desktop.active_win);
-    
+        if(node->win->visible && node->win->folder_idx>=0)
+            draw_folder_icons(node->win->x, node->win->y,
+                              node->win->w, node->win->folder_idx);
+    }
     draw_taskbar();menu_draw();input_draw();
     int sx=desktop.mx,sy=desktop.my;
     if(sx+CURSOR_W>(int)fb.width)sx=fb.width-CURSOR_W;
@@ -385,7 +453,7 @@ void desktop_update_cursor(void){
     fb_flip_rect(sx,sy,CURSOR_W,CURSOR_H);
 }
 
-// ── Keyboard routing (called from kernel main loop) ───────────────────────────
+// ── Keyboard routing ──────────────────────────────────────────────────────────
 void desktop_handle_key(const key_event_t *evt){
     if(!evt || !evt->pressed) return;
     if(input_box.visible){input_handle_key(evt);input_box.dirty=1;return;}
@@ -411,36 +479,76 @@ void desktop_mouse_move(int dx,int dy,int btn_left,int btn_right){
     int rc=btn_right&&!desktop.btn_right;
     desktop.btn_left=btn_left;desktop.btn_right=btn_right;
 
-    // Right click
+    // ── Right click ───────────────────────────────────────────────────────────
     if(rc&&!input_box.visible){
         int icon=icon_at(desktop.mx,desktop.my);
         menu_clear();
         if(icon>=0){
-            menu_icon_target=icon;desktop.selected_icon=icon;
+            // Desktop icon right-click
+            menu_icon_target=icon; desktop.selected_icon=icon;
+            selected_icon_ctx=VFS_ROOT_PARENT;
             menu_add_item("Open",action_open);
             menu_add_separator();
             menu_add_item("Rename",action_rename);
             menu_add_item("Delete",action_delete);
         } else {
             menu_icon_target=-1;
-            int ow=0;
+            int in_folder_win=0;
             for(window_node_t *node=desktop.windows; node; node=node->next){
                 window_t *w=node->win;
                 if(!w->visible)continue;
-                if(desktop.mx>=w->x&&desktop.mx<w->x+w->w&&desktop.my>=w->y&&desktop.my<w->y+w->h){ow=1;break;}
+                if(desktop.mx>=w->x&&desktop.mx<w->x+w->w&&
+                   desktop.my>=w->y&&desktop.my<w->y+w->h){
+                    if(w->folder_idx>=0){
+                        in_folder_win=1;
+                        int ficon=icon_at_in_folder(desktop.mx,desktop.my,
+                                                    w->x,w->y,w->w,w->folder_idx);
+                        if(ficon>=0){
+                            // Icon inside folder right-click
+                            menu_icon_target=ficon;
+                            desktop.selected_icon=ficon;
+                            selected_icon_ctx=w->folder_idx;
+                            menu_add_item("Open",action_open);
+                            menu_add_separator();
+                            menu_add_item("Rename",action_rename);
+                            menu_add_item("Delete",action_delete);
+                        } else {
+                            // Blank space inside folder right-click
+                            active_folder_idx=w->folder_idx;
+                            menu_add_item("New File",action_new_file_in_folder);
+                            menu_add_item("New Folder",action_new_folder_in_folder);
+                        }
+                    }
+                    break;
+                }
             }
-            if(!ow){menu_add_item("New File",action_new_file);menu_add_item("New Folder",action_new_folder);menu_add_separator();menu_add_item("Refresh",action_refresh);}
+            if(!in_folder_win){
+                active_folder_idx=-1;
+                int ow=0;
+                for(window_node_t *node=desktop.windows; node; node=node->next){
+                    window_t *w=node->win;
+                    if(!w->visible)continue;
+                    if(desktop.mx>=w->x&&desktop.mx<w->x+w->w&&
+                       desktop.my>=w->y&&desktop.my<w->y+w->h){ow=1;break;}
+                }
+                if(!ow){
+                    menu_add_item("New File",action_new_file);
+                    menu_add_item("New Folder",action_new_folder);
+                    menu_add_separator();
+                    menu_add_item("Refresh",action_refresh);
+                }
+            }
         }
         if(ctx_menu.nitems>0)menu_show(desktop.mx,desktop.my);
         desktop.needs_full_redraw=1;
     }
 
-    // Left click
+    // ── Left click ────────────────────────────────────────────────────────────
     if(lc){
         if(input_box.visible){input_handle_click(desktop.mx,desktop.my);desktop.needs_full_redraw=1;goto done;}
         if(ctx_menu.visible){menu_handle_click(desktop.mx,desktop.my);desktop.needs_full_redraw=1;goto done;}
 
-        // Window buttons (check all windows)
+        // Window close/min buttons
         window_node_t *topmost=NULL;
         for(window_node_t *node=desktop.windows; node; node=node->next){
             window_t *w=node->win;
@@ -455,31 +563,73 @@ void desktop_mouse_move(int dx,int dy,int btn_left,int btn_right){
             if(hit==BTN_MIN){w->minimized=!w->minimized;w->visible=!w->minimized;desktop.needs_full_redraw=1;goto done;}
         }
 
-        // Window drag/focus (check all windows, first match wins)
+        // Window focus/drag — folder content clicks handled here too so
+        // goto done doesn't swallow them before we can process them
         int cw=0;
         for(window_node_t *node=desktop.windows; node; node=node->next){
             window_t *w=node->win;
             if(!w->visible)continue;
-            if(desktop.mx>=w->x&&desktop.mx<w->x+w->w&&desktop.my>=w->y&&desktop.my<w->y+w->h){
-                desktop.active_win=node;cw=1;
-                if(desktop.my<w->y+TITLEBAR_HEIGHT){w->dragging=1;w->drag_ox=desktop.mx-w->x;w->drag_oy=desktop.my-w->y;}
-                desktop.needs_full_redraw=1;goto done;
+            if(desktop.mx>=w->x&&desktop.mx<w->x+w->w&&
+               desktop.my>=w->y&&desktop.my<w->y+w->h){
+                desktop.active_win=node; cw=1;
+                if(desktop.my<w->y+TITLEBAR_HEIGHT){
+                    // Titlebar drag
+                    w->dragging=1;
+                    w->drag_ox=desktop.mx-w->x;
+                    w->drag_oy=desktop.my-w->y;
+                } else if(w->folder_idx>=0){
+                    // Folder content area — select or open child icon
+                    int ficon=icon_at_in_folder(desktop.mx,desktop.my,
+                                                w->x,w->y,w->w,w->folder_idx);
+                    if(ficon>=0){
+                        if(ficon==desktop.selected_icon &&
+                           selected_icon_ctx==w->folder_idx){
+                            // Second click on same icon in same folder = open
+                            open_entry(ficon);
+                            desktop.selected_icon=-1;
+                            selected_icon_ctx=VFS_ROOT_PARENT;
+                        } else {
+                            // First click = select
+                            desktop.selected_icon=ficon;
+                            selected_icon_ctx=w->folder_idx;
+                        }
+                    } else {
+                        desktop.selected_icon=-1;
+                        selected_icon_ctx=VFS_ROOT_PARENT;
+                    }
+                }
+                desktop.needs_full_redraw=1;
+                goto done;
             }
         }
 
+        // Desktop icon clicks
         if(!cw){
             int icon=icon_at(desktop.mx,desktop.my);
             if(icon>=0){
-                if(icon==desktop.selected_icon){open_entry(icon);desktop.selected_icon=-1;}
-                else{desktop.selected_icon=icon;desktop.needs_full_redraw=1;}
-            } else {desktop.selected_icon=-1;desktop.needs_full_redraw=1;}
+                if(icon==desktop.selected_icon &&
+                   selected_icon_ctx==VFS_ROOT_PARENT){
+                    open_entry(icon);
+                    desktop.selected_icon=-1;
+                    selected_icon_ctx=VFS_ROOT_PARENT;
+                } else {
+                    desktop.selected_icon=icon;
+                    selected_icon_ctx=VFS_ROOT_PARENT;
+                    desktop.needs_full_redraw=1;
+                }
+            } else {
+                desktop.selected_icon=-1;
+                selected_icon_ctx=VFS_ROOT_PARENT;
+                desktop.needs_full_redraw=1;
+            }
         }
     }
 
 done:
-    if(!btn_left)for(window_node_t *node=desktop.windows; node; node=node->next)
-        node->win->dragging=0;
-    
+    if(!btn_left)
+        for(window_node_t *node=desktop.windows; node; node=node->next)
+            node->win->dragging=0;
+
     if(btn_left){
         for(window_node_t *node=desktop.windows; node; node=node->next){
             window_t *w=node->win;

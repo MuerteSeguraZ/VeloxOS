@@ -1,5 +1,8 @@
 # Velox OS Makefile
 
+DISK = velox_disk.vhd
+DISK_SIZE_MB = 64
+
 CC  = gcc
 AS  = nasm
 LD  = ld
@@ -55,6 +58,9 @@ obj/%.o: kernel/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
+$(DISK):
+	qemu-img create -f vpc $(DISK) $(DISK_SIZE_MB)M
+
 $(KERNEL): $(OBJS)
 	@mkdir -p iso/boot/grub
 	$(LD) $(LDFLAGS) $(OBJS) -o $@
@@ -63,9 +69,13 @@ $(ISO): $(KERNEL)
 	cp boot/grub.cfg iso/boot/grub/grub.cfg
 	grub-mkrescue --directory=/usr/lib/grub/i386-pc -o $(ISO) iso/
 
-run: $(ISO)
-	qemu-system-x86_64 -cdrom $(ISO) -m 256M -vga std -no-reboot
+run: $(ISO) $(DISK)
+	qemu-system-x86_64 -cdrom $(ISO) -m 256M -vga std -no-reboot \
+	    -drive file=$(DISK),format=vpc,if=ide
 
 clean:
 	rm -rf obj/
 	rm -f $(KERNEL) $(ISO)
+
+cleanall: clean
+	rm -f $(DISK)

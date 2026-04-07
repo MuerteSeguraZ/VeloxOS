@@ -2,6 +2,7 @@
 #include "../graphics/framebuffer.h"
 #include "../graphics/text.h"
 #include "../drivers/keyboard/keyboard.h"
+#include "../fs/fs.h"
 
 #define COL_WIN_TITLEBAR_ACT   0x1e3a5f
 #define COL_WIN_TITLEBAR_INACT 0x1a1a2e
@@ -24,7 +25,17 @@ static void mem_cpy(char *d,const char *s,int n){while(n--)*d++=*s++;}
 void window_set_content(window_t *win,const char *text,uint32_t len){
     if(len>=WIN_CONTENT_MAX)len=WIN_CONTENT_MAX-1;
     mem_cpy(win->content,text,len); win->content[len]=0;
-    win->has_content=1; win->editable=0; win->edit_dirty=0; win->fs_idx=-1;
+    win->has_content=1; win->editable=0; win->edit_dirty=0;
+    win->fs_idx=-1; win->folder_idx=-1;
+}
+
+void window_set_folder(window_t *win, int folder_idx){
+    win->folder_idx  = folder_idx;
+    win->has_content = 0;
+    win->editable    = 0;
+    win->edit_dirty  = 0;
+    win->fs_idx      = -1;
+    win->content[0]  = 0;
 }
 
 void window_set_editable(window_t *win,const char *text,uint32_t len,int fs_idx){
@@ -132,6 +143,21 @@ void window_draw(window_t *win,int active){
             while(*ep){if(*ep=='\n'||cc>=max_cols){cr++;cc=0;}else cc++;ep++;}
             int dr=cr-win->scroll_row;
             if(dr>=0&&dr<max_rows)fb_fill_rect(cx+cc*(8+1),cy+dr*(8+3),2,8,COL_TEXT_CURSOR);
+        }
+    } else if(win->folder_idx >= 0) {
+        // Background tint only — icons are drawn by desktop_redraw via draw_folder_icons
+        fb_fill_rect(cx-4, cy-4, max_w+8, max_h+8, 0x0c0c1a);
+
+        // Show hint if folder is empty
+        int has_children=0;
+        for(int i=0;i<VFS_MAX_FILES;i++){
+            if(!vfs.entries[i].used)continue;
+            if((int)vfs.entries[i].parent_idx!=win->folder_idx)continue;
+            has_children=1; break;
+        }
+        if(!has_children){
+            text_puts(cx,cy,"(Empty folder)",0x506070,0,1);
+            text_puts(cx,cy+16,"Right-click to create files",0x3a4a5a,0,1);
         }
     } else {
         text_puts(cx,cy,win->title,0x6090c0,0,1);
