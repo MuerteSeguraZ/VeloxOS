@@ -3,3 +3,4 @@ obj/
 *.vhd
 *.vhdx
 *.o
+*.bat

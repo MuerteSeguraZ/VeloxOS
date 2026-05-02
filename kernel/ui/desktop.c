@@ -32,22 +32,93 @@ static const uint8_t cursor_bmp[CURSOR_H][CURSOR_W]={
 #define ICON_GRID_X  16
 #define ICON_GRID_Y  16
 
-// Tracks which parent context the current selection is in.
-// VFS_ROOT_PARENT(-1) = desktop, >=0 = inside that folder window.
-// Prevents the same VFS index owned by different parents from
-// falsely triggering a double-click open.
 static int selected_icon_ctx = VFS_ROOT_PARENT;
 
-static int icon_at(int mx,int my){
-    if(!vfs.mounted)return -1;
-    int mc=(fb.width-ICON_GRID_X*2)/ICON_CELL_W; if(mc<1)mc=1;
-    int col=0,row=0,slot=0;
+// ── Icon grid positions ───────────────────────────────────────────────────────
+// Each desktop icon has an assigned grid cell (col, row). -1 = unassigned
+// (will be auto-assigned to the next free slot on first draw).
+static int icon_col[VFS_MAX_FILES];
+static int icon_row[VFS_MAX_FILES];
+
+// ── Icon drag state ───────────────────────────────────────────────────────────
+static int icon_dragging          = 0;
+static int drag_icon_idx          = -1;
+static int drag_px                = 0;  // current pixel pos while dragging
+static int drag_py                = 0;
+static int drag_ox                = 0;  // cursor offset within icon
+static int drag_oy                = 0;
+static int drag_moved             = 0;
+static int icon_drag_was_selected = 0;
+
+static int grid_cols(void){int mc=(fb.width-ICON_GRID_X*2)/ICON_CELL_W;return mc<1?1:mc;}
+
+// Returns 1 if grid cell (c,r) is occupied by any icon except `exclude`.
+static int cell_taken(int c,int r,int exclude){
+    for(int i=0;i<VFS_MAX_FILES;i++){
+        if(i==exclude)continue;
+        if(!vfs.entries[i].used)continue;
+        if((int)vfs.entries[i].parent_idx!=VFS_ROOT_PARENT)continue;
+        if(icon_col[i]==c&&icon_row[i]==r)return 1;
+    }
+    return 0;
+}
+
+// Ensure every desktop icon has a valid grid cell assigned.
+static void icons_assign_slots(void){
+    int mc=grid_cols();
+    int slot=0;
     for(int i=0;i<VFS_MAX_FILES;i++){
         if(!vfs.entries[i].used)continue;
         if((int)vfs.entries[i].parent_idx!=VFS_ROOT_PARENT)continue;
-        int ix=ICON_GRID_X+col*ICON_CELL_W,iy=ICON_GRID_Y+row*ICON_CELL_H;
+        if(icon_col[i]>=0)continue; // already placed
+        // advance slot until we find a free cell
+        while(cell_taken(slot%mc,slot/mc,i))slot++;
+        icon_col[i]=slot%mc;
+        icon_row[i]=slot/mc;
+        slot++;
+    }
+}
+
+// Pixel top-left of grid cell (c,r).
+static void cell_to_px(int c,int r,int *px,int *py){
+    *px=ICON_GRID_X+c*ICON_CELL_W;
+    *py=ICON_GRID_Y+r*ICON_CELL_H;
+}
+
+// Returns the position of desktop icon i (pixel top-left).
+static void icon_get_pos(int idx,int *ox,int *oy){
+    // If we're dragging this icon, return live cursor position
+    if(icon_dragging&&idx==drag_icon_idx){*ox=drag_px;*oy=drag_py;return;}
+    icons_assign_slots();
+    cell_to_px(icon_col[idx],icon_row[idx],ox,oy);
+}
+
+// Snap pixel position to nearest free grid cell; returns 1 if found.
+static int snap_to_grid(int px,int py,int exclude,int *out_c,int *out_r){
+    int mc=grid_cols();
+    int best_c=-1,best_r=-1,best_d=0x7fffffff;
+    // search a generous range of cells
+    for(int r=0;r<16;r++){
+        for(int c=0;c<mc;c++){
+            if(cell_taken(c,r,exclude))continue;
+            int cx,cy; cell_to_px(c,r,&cx,&cy);
+            int dx=px-cx,dy=py-cy;
+            int d=dx*dx+dy*dy;
+            if(d<best_d){best_d=d;best_c=c;best_r=r;}
+        }
+    }
+    if(best_c<0)return 0;
+    *out_c=best_c;*out_r=best_r;
+    return 1;
+}
+
+static int icon_at(int mx,int my){
+    if(!vfs.mounted)return -1;
+    for(int i=0;i<VFS_MAX_FILES;i++){
+        if(!vfs.entries[i].used)continue;
+        if((int)vfs.entries[i].parent_idx!=VFS_ROOT_PARENT)continue;
+        int ix,iy; icon_get_pos(i,&ix,&iy);
         if(mx>=ix&&mx<ix+ICON_W&&my>=iy&&my<iy+ICON_H+ICON_LABEL_H)return i;
-        slot++;col=slot%mc;row=slot/mc;
     }
     return -1;
 }
@@ -302,13 +373,11 @@ static void draw_folder_icons(int wx,int wy,int ww,int parent_idx){
 
 static void draw_icons(void){
     if(!vfs.mounted)return;
-    int mc=(fb.width-ICON_GRID_X*2)/ICON_CELL_W;if(mc<1)mc=1;
-    int col=0,row=0,slot=0;
     for(int i=0;i<VFS_MAX_FILES;i++){
         if(!vfs.entries[i].used)continue;
         if((int)vfs.entries[i].parent_idx!=VFS_ROOT_PARENT)continue;
         vfs_entry_t *e=&vfs.entries[i];
-        int ix=ICON_GRID_X+col*ICON_CELL_W,iy=ICON_GRID_Y+row*ICON_CELL_H;
+        int ix,iy; icon_get_pos(i,&ix,&iy);
         if(i==desktop.selected_icon && selected_icon_ctx==VFS_ROOT_PARENT){
             fb_fill_rect(ix-2,iy-2,ICON_W+4,ICON_H+ICON_LABEL_H+4,0x2a4a7a);
             fb_draw_rect(ix-2,iy-2,ICON_W+4,ICON_H+ICON_LABEL_H+4,0x4a7fa5);
@@ -333,7 +402,6 @@ static void draw_icons(void){
         if(e->name[li]){label[li++]='.';label[li++]='.';}label[li]=0;
         int lw=text_strlen(label)*(8+1);
         text_puts(ix+(ICON_W-lw)/2,iy+ICON_H+2,label,0xd8e8f8,0,1);
-        slot++;col=slot%mc;row=slot/mc;
     }
 }
 
@@ -385,6 +453,8 @@ void desktop_init(void){
     desktop.dirty=1;desktop.needs_full_redraw=1;
     desktop.cursor_saved=0;desktop.selected_icon=-1;
     selected_icon_ctx=VFS_ROOT_PARENT;
+    icon_dragging=0;drag_icon_idx=-1;drag_moved=0;icon_drag_was_selected=0;
+    for(int i=0;i<VFS_MAX_FILES;i++){icon_col[i]=-1;icon_row[i]=-1;}
     menu_clear();
 }
 
@@ -607,17 +677,20 @@ void desktop_mouse_move(int dx,int dy,int btn_left,int btn_right){
         if(!cw){
             int icon=icon_at(desktop.mx,desktop.my);
             if(icon>=0){
-                if(icon==desktop.selected_icon &&
-                   selected_icon_ctx==VFS_ROOT_PARENT){
-                    open_entry(icon);
-                    desktop.selected_icon=-1;
-                    selected_icon_ctx=VFS_ROOT_PARENT;
-                } else {
-                    desktop.selected_icon=icon;
-                    selected_icon_ctx=VFS_ROOT_PARENT;
-                    desktop.needs_full_redraw=1;
-                }
+                int already=(icon==desktop.selected_icon&&selected_icon_ctx==VFS_ROOT_PARENT);
+                int ix,iy; icon_get_pos(icon,&ix,&iy);
+                icon_dragging=1;
+                drag_icon_idx=icon;
+                drag_px=ix; drag_py=iy;
+                drag_ox=desktop.mx-ix;
+                drag_oy=desktop.my-iy;
+                drag_moved=0;
+                icon_drag_was_selected=already;
+                desktop.selected_icon=icon;
+                selected_icon_ctx=VFS_ROOT_PARENT;
+                desktop.needs_full_redraw=1;
             } else {
+                icon_dragging=0; drag_icon_idx=-1;
                 desktop.selected_icon=-1;
                 selected_icon_ctx=VFS_ROOT_PARENT;
                 desktop.needs_full_redraw=1;
@@ -626,9 +699,29 @@ void desktop_mouse_move(int dx,int dy,int btn_left,int btn_right){
     }
 
 done:
-    if(!btn_left)
+    if(!btn_left){
         for(window_node_t *node=desktop.windows; node; node=node->next)
             node->win->dragging=0;
+        // Icon drag release
+        if(icon_dragging){
+            if(!drag_moved&&icon_drag_was_selected&&drag_icon_idx>=0){
+                open_entry(drag_icon_idx);
+                desktop.selected_icon=-1;
+                selected_icon_ctx=VFS_ROOT_PARENT;
+                desktop.needs_full_redraw=1;
+            } else if(drag_moved&&drag_icon_idx>=0){
+                // Snap to nearest free grid cell
+                int nc,nr;
+                if(snap_to_grid(drag_px,drag_py,drag_icon_idx,&nc,&nr)){
+                    icon_col[drag_icon_idx]=nc;
+                    icon_row[drag_icon_idx]=nr;
+                }
+                // else: no free cell found, icon stays where it was (col/row unchanged)
+                desktop.needs_full_redraw=1;
+            }
+            icon_dragging=0;drag_icon_idx=-1;drag_moved=0;icon_drag_was_selected=0;
+        }
+    }
 
     if(btn_left){
         for(window_node_t *node=desktop.windows; node; node=node->next){
@@ -638,6 +731,21 @@ done:
             if(ny<0)ny=0;
             if(ny+w->h>(int)fb.height-TASKBAR_HEIGHT)ny=fb.height-TASKBAR_HEIGHT-w->h;
             if(nx!=w->x||ny!=w->y){w->x=nx;w->y=ny;desktop.needs_full_redraw=1;}
+        }
+        // Icon drag movement
+        if(icon_dragging&&drag_icon_idx>=0){
+            int nx=desktop.mx-drag_ox;
+            int ny=desktop.my-drag_oy;
+            if(nx<0)nx=0;
+            if(ny<0)ny=0;
+            if(nx+ICON_W>(int)fb.width)nx=fb.width-ICON_W;
+            if(ny+ICON_H+ICON_LABEL_H>(int)fb.height-TASKBAR_HEIGHT)
+                ny=fb.height-TASKBAR_HEIGHT-ICON_H-ICON_LABEL_H;
+            if(nx!=drag_px||ny!=drag_py){
+                drag_px=nx; drag_py=ny;
+                drag_moved=1;
+                desktop.needs_full_redraw=1;
+            }
         }
     }
     desktop.dirty=1;
