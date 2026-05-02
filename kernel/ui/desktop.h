@@ -16,6 +16,15 @@
 #define COL_CLOCK           0xc0d8f0
 #define COL_TRAY_BG         0x111122
 
+// ── Icon grid ─────────────────────────────────────────────────────────────────
+#define ICON_W       52
+#define ICON_H       40
+#define ICON_LABEL_H 10
+#define ICON_CELL_W  80
+#define ICON_CELL_H  70
+#define ICON_GRID_X  16
+#define ICON_GRID_Y  16
+
 // Window node for linked list
 typedef struct window_node {
     window_t *win;

@@ -43,6 +43,9 @@
 #define MOD_ALT     (1 << 2)
 #define MOD_CAPS    (1 << 3)
 
+// ── Ring buffer ───────────────────────────────────────────────────────────────
+#define KBD_BUF_SIZE 64
+
 // ── Key event ─────────────────────────────────────────────────────────────────
 typedef struct {
     uint8_t  scancode;   // KEY_* value or ASCII char (named scancode for compat)

@@ -1,8 +1,5 @@
 #include "rtc.h"
 
-#define CMOS_ADDR 0x70
-#define CMOS_DATA 0x71
-
 static inline void outb(uint16_t port, uint8_t val) {
     __asm__ volatile ("outb %0, %1" : : "a"(val), "Nd"(port));
 }

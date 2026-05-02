@@ -1,12 +1,18 @@
 #pragma once
 #include "../stdint.h"
 
-#define VFS_MAGIC            0x564C5847   // "VLXG" — bumped so old VHDs auto-reformat
+#define VFS_MAGIC            0x564C5847
 #define VFS_VERSION          2
 #define VFS_MAX_FILES        64
 #define VFS_NAME_MAX         48
 #define VFS_MAX_FILE_SECTORS 64
 #define VFS_ROOT_PARENT      -1           // parent_idx value for root-level entries
+
+#define SB_SECTOR          0
+#define TABLE_SECTOR       1
+#define TABLE_SECTORS      8
+#define DATA_START         (TABLE_SECTOR + TABLE_SECTORS)
+#define ENTRIES_PER_SECTOR (512 / sizeof(vfs_entry_t))
 
 // Superblock — sector 0
 typedef struct {

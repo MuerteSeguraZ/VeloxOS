@@ -4,22 +4,6 @@
 #include "../drivers/keyboard/keyboard.h"
 #include "../fs/fs.h"
 
-#define COL_WIN_TITLEBAR_ACT   0x1e3a5f
-#define COL_WIN_TITLEBAR_INACT 0x1a1a2e
-#define COL_WIN_TITLEBAR_GRAD  0x0d2137
-#define COL_WIN_BODY           0x0e0e1a
-#define COL_WIN_BODY2          0x181828
-#define COL_WIN_BORDER_ACT     0x4a7fa5
-#define COL_WIN_BORDER_INACT   0x2a2a4a
-#define COL_TEXT_WHITE         0xf0f0f0
-#define COL_TEXT_DIM           0x7080a0
-#define COL_TEXT_CONTENT       0xc8d8e8
-#define COL_TEXT_CURSOR        0x80c0ff
-#define COL_BTN_CLOSE          0xe05050
-#define COL_BTN_MIN            0xe0a030
-#define COL_BTN_MAX            0x40b060
-#define COL_DIRTY_DOT          0xe0a030
-
 static void mem_cpy(char *d,const char *s,int n){while(n--)*d++=*s++;}
 
 void window_set_content(window_t *win,const char *text,uint32_t len){

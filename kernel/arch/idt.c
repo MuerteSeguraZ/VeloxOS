@@ -1,12 +1,6 @@
 #include "idt.h"
 #include "../drivers/keyboard/keyboard.h"
 
-#define IDT_ENTRIES 256
-#define PIC1_CMD    0x20
-#define PIC1_DATA   0x21
-#define PIC2_CMD    0xA0
-#define PIC2_DATA   0xA1
-
 static idt_entry_t   idt[IDT_ENTRIES];
 static idt_ptr_t     idt_ptr;
 static irq_handler_t irq_handlers[16];

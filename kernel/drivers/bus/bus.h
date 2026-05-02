@@ -1,6 +1,8 @@
 #pragma once
 #include "../../stdint.h"
 
+#define MAX_DEVICES 32
+
 typedef int (*bus_probe_fn)(void);
 
 typedef int (*bus_init_fn)(void);

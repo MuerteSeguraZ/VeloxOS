@@ -1,10 +1,6 @@
 #include "pit.h"
 #include "idt.h"
 
-#define PIT_CHANNEL0 0x40
-#define PIT_CMD      0x43
-#define PIT_BASE_HZ  1193182
-
 static volatile uint64_t tick_count = 0;
 static volatile int      tick_fired = 0;
 

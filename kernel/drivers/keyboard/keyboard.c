@@ -1,8 +1,5 @@
 #include "keyboard.h"
 
-// ── Ring buffer ───────────────────────────────────────────────────────────────
-#define KBD_BUF_SIZE 64
-
 static key_event_t kbd_buf[KBD_BUF_SIZE];
 static volatile int kbd_head = 0;
 static volatile int kbd_tail = 0;

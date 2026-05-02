@@ -4,15 +4,6 @@
 
 context_menu_t ctx_menu;
 
-// ── Colors ────────────────────────────────────────────────────────────────────
-#define COL_MENU_BG       0x12121e
-#define COL_MENU_BORDER   0x4a7fa5
-#define COL_MENU_HOVER    0x1e3a5f
-#define COL_MENU_TEXT     0xe0e0f0
-#define COL_MENU_TEXT_DIM 0x607090
-#define COL_MENU_SEP      0x2a3a5a
-#define COL_MENU_SHADOW   0x000000
-
 void menu_clear(void) {
     ctx_menu.nitems  = 0;
     ctx_menu.visible = 0;

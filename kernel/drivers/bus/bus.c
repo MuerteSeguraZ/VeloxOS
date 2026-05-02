@@ -1,8 +1,6 @@
 #include "bus.h"
 #include "../../graphics/text.h"
 
-#define MAX_DEVICES 32
-
 static bus_device_t devices[MAX_DEVICES];
 static int device_count = 0;
 

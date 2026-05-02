@@ -3,12 +3,6 @@
 
 vfs_t vfs;
 
-#define SB_SECTOR          0
-#define TABLE_SECTOR       1
-#define TABLE_SECTORS      8
-#define DATA_START         (TABLE_SECTOR + TABLE_SECTORS)
-#define ENTRIES_PER_SECTOR (512 / sizeof(vfs_entry_t))
-
 static void mem_set(void *dst, uint8_t val, uint32_t n) {
     uint8_t *p=(uint8_t*)dst; while(n--)*p++=val;
 }

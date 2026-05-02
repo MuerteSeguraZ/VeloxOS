@@ -5,20 +5,6 @@
 
 input_box_t input_box;
 
-#define COL_BG        0x12121e
-#define COL_BORDER    0x4a7fa5
-#define COL_FIELD     0x0a0a18
-#define COL_TEXT      0xe0f0ff
-#define COL_CURSOR    0x80c0ff
-#define COL_TITLE_FG  0xc0d8f0
-#define COL_MSG       0xa0b8d0
-#define COL_BTN_YES   0x2a6a3a
-#define COL_BTN_NO    0x6a2a2a
-#define COL_BTN_CANC  0x2a2a5a
-#define COL_BD_YES    0x4a9a6a
-#define COL_BD_NO     0x9a4a4a
-#define COL_BD_CANC   0x4a4a9a
-
 static void str_cpy(char *d,const char *s,int max){
     int i=0;while(s[i]&&i<max-1){d[i]=s[i];i++;}d[i]=0;
 }

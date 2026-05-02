@@ -1,10 +1,6 @@
 #include "mouse.h"
 #include "../../arch/idt.h"
 
-#define PS2_DATA   0x60
-#define PS2_STATUS 0x64
-#define PS2_CMD    0x64
-
 static inline void outb(uint16_t port, uint8_t val) {
     __asm__ volatile ("outb %0, %1" : : "a"(val), "Nd"(port));
 }

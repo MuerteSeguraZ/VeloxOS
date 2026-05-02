@@ -1,24 +1,5 @@
 #include "alloc.h"
 
-// ── Free-list allocator ───────────────────────────────────────────────────────
-// Each block has a header immediately before the user data:
-//
-//   [ block_t header (16 bytes) ][ user data ... ]
-//
-// Free blocks are linked in a singly-linked list sorted by address.
-// Adjacent free blocks are coalesced on free().
-
-typedef struct block {
-    uint32_t       size;    // size of user data (not including header)
-    uint32_t       free;    // 1 = free, 0 = used
-    struct block  *next;    // next block in free list (only valid when free=1)
-    uint32_t       magic;   // 0xVLXA = valid, detect corruption
-} block_t;
-
-#define BLOCK_MAGIC  0x564C5841   // "VLXA"
-#define HEADER_SIZE  sizeof(block_t)
-#define MIN_SPLIT    (HEADER_SIZE + 16)  // don't split if remainder < this
-
 static uint64_t heap_start = 0;
 static uint64_t heap_size  = 0;
 static block_t *free_list  = 0;   // head of free list
