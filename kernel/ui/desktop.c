@@ -233,25 +233,42 @@ static void open_entry(int fs_idx){
 static int file_counter=0,folder_counter=0;
 static void itoa2(int n,char *b){if(n>=10){b[0]='0'+n/10;b[1]='0'+n%10;b[2]=0;}else{b[0]='0'+n;b[1]=0;}}
 
+static int menu_icon_target=-1;
+static void action_open(void){if(menu_icon_target>=0)open_entry(menu_icon_target);}
+
+static int rclick_col=-1;
+static int rclick_row=-1;
+
+static void place_new_icon(const char *name){
+    int idx=vfs_find(name);
+    if(idx<0)return;
+    if(rclick_col>=0){
+        int tc=rclick_col,tr=rclick_row;
+        if(cell_taken(tc,tr,idx)){
+            int px,py; cell_to_px(tc,tr,&px,&py);
+            snap_to_grid(px,py,idx,&tc,&tr);
+        }
+        icon_col[idx]=tc;
+        icon_row[idx]=tr;
+    }
+}
+
 static void action_new_file(void){
     if(!vfs.mounted)return;
     char name[32];char num[4];itoa2(++file_counter,num);
     int i=0;const char *p="File ";while(*p)name[i++]=*p++;
     int j=0;while(num[j])name[i++]=num[j++];
     name[i++]='.';name[i++]='t';name[i++]='x';name[i++]='t';name[i]=0;
-    vfs_create(name,0);desktop.needs_full_redraw=1;
+    vfs_create(name,0);place_new_icon(name);desktop.needs_full_redraw=1;
 }
 static void action_new_folder(void){
     if(!vfs.mounted)return;
     char name[32];char num[4];itoa2(++folder_counter,num);
     int i=0;const char *p="Folder ";while(*p)name[i++]=*p++;
     int j=0;while(num[j])name[i++]=num[j++];name[i]=0;
-    vfs_create(name,1);desktop.needs_full_redraw=1;
+    vfs_create(name,1);place_new_icon(name);desktop.needs_full_redraw=1;
 }
 static void action_refresh(void){desktop.needs_full_redraw=1;}
-
-static int menu_icon_target=-1;
-static void action_open(void){if(menu_icon_target>=0)open_entry(menu_icon_target);}
 
 // ── Folder-scoped "New File" / "New Folder" ───────────────────────────────────
 static int active_folder_idx=-1;
@@ -445,6 +462,7 @@ void desktop_init(void){
     desktop.cursor_saved=0;desktop.selected_icon=-1;
     selected_icon_ctx=VFS_ROOT_PARENT;
     icon_dragging=0;drag_icon_idx=-1;drag_moved=0;icon_drag_was_selected=0;
+    rclick_col=-1;rclick_row=-1;
     for(int i=0;i<VFS_MAX_FILES;i++){icon_col[i]=-1;icon_row[i]=-1;}
     menu_clear();
 }
@@ -593,6 +611,12 @@ void desktop_mouse_move(int dx,int dy,int btn_left,int btn_right){
                        desktop.my>=w->y&&desktop.my<w->y+w->h){ow=1;break;}
                 }
                 if(!ow){
+                    int mc=grid_cols();
+                    rclick_col=(desktop.mx-ICON_GRID_X)/ICON_CELL_W;
+                    rclick_row=(desktop.my-ICON_GRID_Y)/ICON_CELL_H;
+                    if(rclick_col<0)rclick_col=0;
+                    if(rclick_col>=mc)rclick_col=mc-1;
+                    if(rclick_row<0)rclick_row=0;
                     menu_add_item("New File",action_new_file);
                     menu_add_item("New Folder",action_new_folder);
                     menu_add_separator();
