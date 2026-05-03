@@ -39,23 +39,43 @@ void kernel_main(uint32_t mb2_info_phys) {
     idt_init();
     pit_init(60);
 
-    // ── Register devices to bus ─────────────────────────────────────────────
+    // ── Initialize serial for debug output ──────────────────────────────────
+    DPRINT_INIT();
+    DPRINT("\n=== Velox OS Kernel Boot ===\n\n");
+
+    // ── PCI Bus Enumeration ────────────────────────────────────────────────────
+    DPRINT("Initializing PCI bus...\n");
+    pci_init();
+    int pci_count = pci_enumerate();
+    DPRINT("\n");
+
+    // ── Register devices to bus ────────────────────────────────────────────────
+    DPRINT("Registering system devices...\n");
     bus_register("ata-primary",   "storage", ata_bus_probe, ata_bus_init);
     bus_register("ata-secondary", "storage", ata_bus_probe, ata_bus_init);
     bus_register("mouse-ps2",     "input",   mouse_bus_probe, mouse_bus_init);
     bus_register("rtc-cmos",      "rtc",     rtc_bus_probe, rtc_bus_init);
 
-    // ── Enumerate devices (probe + initialize) ──────────────────────────────
+    // ── Enumerate devices (probe + initialize) ────────────────────────────────
+    DPRINT("Enumerating and initializing devices...\n");
     int devices_init = bus_enumerate();
     (void)devices_init;  // Suppress unused warning
+    DPRINT("Device initialization complete\n\n");
 
-    // ── Find and mount filesystem ───────────────────────────────────────────
+    // ── Find and mount filesystem ──────────────────────────────────────────────
+    DPRINT("Searching for storage devices...\n");
     ata_drive_t *disk=0; int found_bus=-1,found_drv=-1;
     for(int b=0;b<=1&&!disk;b++)for(int d=0;d<=1&&!disk;d++){
         ata_drive_t *c=ata_get_drive(b,d);if(c->present){disk=c;found_bus=b;found_drv=d;}
     }
     int fs_ok=0;
     if(disk){
+        DPRINT("Found disk at ATA ");
+        DPRINT_HEX(found_bus);
+        DPRINT(":");
+        DPRINT_HEX(found_drv);
+        DPRINT(" - Mounting filesystem\n");
+        
         if(!vfs_mount(found_bus,found_drv))vfs_format(found_bus,found_drv);
         fs_ok=1;
         if(vfs_find("velox.txt")<0){
@@ -64,19 +84,27 @@ void kernel_main(uint32_t mb2_info_phys) {
                 const char *msg="Welcome to Velox OS!\nThis file was created on first boot.\nYou can edit and save this file.\n";
                 uint32_t len=0;while(msg[len])len++;
                 vfs_write(idx,msg,len);
+                DPRINT("Created velox.txt on boot\n");
             }
         }
+        DPRINT("Filesystem ready\n");
+    } else {
+        DPRINT("No storage device found\n");
     }
+    DPRINT("\n");
 
-    // ── Initialize UI ───────────────────────────────────────────────────────
+    // ── Initialize UI ──────────────────────────────────────────────────────────
+    DPRINT("Initializing desktop...\n");
     desktop_init();
     desktop_add_window(80,60,340,220,fs_ok?"Welcome - Disk OK":"Welcome - No Disk");
     desktop_add_window(450,130,300,200,"About Velox");
     desktop_redraw();
+    DPRINT("Desktop ready\n");
+    DPRINT("\n=== Boot Complete ===\n\n");
 
     uint64_t last_clock_tick=0;
 
-    // ── Main event loop ─────────────────────────────────────────────────────
+    // ── Main event loop ────────────────────────────────────────────────────────
     while(1){
         pit_wait_tick();
 

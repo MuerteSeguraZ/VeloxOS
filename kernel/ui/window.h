@@ -30,6 +30,8 @@
 #define COL_BTN_MAX            0x40b060
 #define COL_DIRTY_DOT          0xe0a030
 
+struct explorer_t;
+
 typedef struct {
     int  x, y, w, h;
     char title[TITLE_MAX];
@@ -47,6 +49,7 @@ typedef struct {
     int  fs_idx;        // backing vfs entry for editable files (-1 = none)
     int  folder_idx;    // vfs entry index if this is a folder view (-1 = not a folder)
     int  scroll_row;
+    struct explorer_t *explorer;
 } window_t;
 
 void window_draw(window_t *win, int active);

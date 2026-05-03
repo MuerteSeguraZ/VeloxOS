@@ -16,23 +16,25 @@ LDFLAGS = -T kernel/arch/linker.ld -nostdlib -z max-page-size=0x1000
 
 ASFLAGS = -f elf64
 
-SRCS_C = kernel/kernel.c                  \
-         kernel/mm/alloc.c                \
-         kernel/graphics/framebuffer.c    \
-         kernel/graphics/font.c           \
-         kernel/graphics/text.c           \
-         kernel/ui/window.c               \
-         kernel/ui/desktop.c              \
-         kernel/ui/menu.c                 \
-         kernel/ui/input.c                \
-         kernel/drivers/mouse/mouse.c     \
+SRCS_C = kernel/kernel.c                    \
+         kernel/mm/alloc.c                  \
+         kernel/graphics/framebuffer.c      \
+         kernel/graphics/font.c             \
+         kernel/graphics/text.c             \
+         kernel/ui/window.c                 \
+         kernel/ui/desktop.c                \
+         kernel/ui/menu.c                   \
+         kernel/ui/input.c                  \
+         kernel/drivers/mouse/mouse.c       \
          kernel/drivers/keyboard/keyboard.c \
-         kernel/drivers/rtc/rtc.c         \
-         kernel/drivers/ata/ata.c         \
-         kernel/drivers/bus/bus.c         \
-         kernel/fs/fs.c                   \
-         kernel/arch/idt.c                \
-         kernel/arch/pit.c
+         kernel/drivers/rtc/rtc.c           \
+         kernel/drivers/ata/ata.c           \
+         kernel/drivers/bus/bus.c           \
+         kernel/drivers/pci/pci.c           \
+         kernel/fs/fs.c                     \
+         kernel/arch/idt.c                  \
+         kernel/arch/pit.c                  \
+         kernel/apps/explorer.c             \
 
 SRCS_S = kernel/arch/boot.asm \
          kernel/arch/isr.asm
@@ -71,7 +73,7 @@ $(ISO): $(KERNEL)
 
 run: $(ISO) $(DISK)
 	qemu-system-x86_64 -cdrom $(ISO) -m 256M -vga std -no-reboot \
-	    -drive file=$(DISK),format=vpc,if=ide
+	    -drive file=$(DISK),format=vpc,if=ide -serial stdio
 
 clean:
 	rm -rf obj/

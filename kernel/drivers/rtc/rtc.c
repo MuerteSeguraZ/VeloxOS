@@ -1,20 +1,20 @@
 #include "rtc.h"
 
-static inline void outb(uint16_t port, uint8_t val) {
+static inline void rtc_outb(uint16_t port, uint8_t val) {
     __asm__ volatile ("outb %0, %1" : : "a"(val), "Nd"(port));
 }
-static inline uint8_t inb(uint16_t port) {
+static inline uint8_t rtc_inb(uint16_t port) {
     uint8_t r; __asm__ volatile ("inb %1, %0" : "=a"(r) : "Nd"(port)); return r;
 }
 
 static uint8_t cmos_read(uint8_t reg) {
-    outb(CMOS_ADDR, reg);
-    return inb(CMOS_DATA);
+    rtc_outb(CMOS_ADDR, reg);
+    return rtc_inb(CMOS_DATA);
 }
 
 static int rtc_updating(void) {
-    outb(CMOS_ADDR, 0x0A);
-    return inb(CMOS_DATA) & 0x80;
+    rtc_outb(CMOS_ADDR, 0x0A);
+    return rtc_inb(CMOS_DATA) & 0x80;
 }
 
 static uint8_t bcd_to_bin(uint8_t bcd) {

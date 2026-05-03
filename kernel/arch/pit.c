@@ -4,7 +4,7 @@
 static volatile uint64_t tick_count = 0;
 static volatile int      tick_fired = 0;
 
-static inline void outb(uint16_t port, uint8_t val) {
+static inline void pit_outb(uint16_t port, uint8_t val) {
     __asm__ volatile ("outb %0, %1" : : "a"(val), "Nd"(port));
 }
 
@@ -17,9 +17,9 @@ void pit_init(uint32_t hz) {
     uint32_t divisor = PIT_BASE_HZ / hz;
     if (divisor > 0xFFFF) divisor = 0xFFFF;
     if (divisor < 1)      divisor = 1;
-    outb(PIT_CMD,      0x36);
-    outb(PIT_CHANNEL0, (uint8_t)(divisor & 0xFF));
-    outb(PIT_CHANNEL0, (uint8_t)((divisor >> 8) & 0xFF));
+    pit_outb(PIT_CMD,      0x36);
+    pit_outb(PIT_CHANNEL0, (uint8_t)(divisor & 0xFF));
+    pit_outb(PIT_CHANNEL0, (uint8_t)((divisor >> 8) & 0xFF));
     irq_register(0, pit_irq_handler);
 }
 

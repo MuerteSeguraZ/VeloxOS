@@ -5,9 +5,9 @@ static idt_entry_t   idt[IDT_ENTRIES];
 static idt_ptr_t     idt_ptr;
 static irq_handler_t irq_handlers[16];
 
-static inline void outb(uint16_t port,uint8_t val){__asm__ volatile("outb %0,%1"::"a"(val),"Nd"(port));}
-static inline uint8_t inb(uint16_t port){uint8_t r;__asm__ volatile("inb %1,%0":"=a"(r):"Nd"(port));return r;}
-static inline void io_wait(void){outb(0x80,0);}
+static inline void idt_outb(uint16_t port,uint8_t val){__asm__ volatile("outb %0,%1"::"a"(val),"Nd"(port));}
+static inline uint8_t idt_inb(uint16_t port){uint8_t r;__asm__ volatile("inb %1,%0":"=a"(r):"Nd"(port));return r;}
+static inline void io_wait(void){idt_outb(0x80,0);}
 
 extern void irq_stub_0(void);  extern void irq_stub_1(void);
 extern void irq_stub_2(void);  extern void irq_stub_3(void);
@@ -25,16 +25,16 @@ static void idt_set(int n,uint64_t h){
 }
 
 static void pic_remap(void){
-    outb(PIC1_CMD,0x11);io_wait(); outb(PIC2_CMD,0x11);io_wait();
-    outb(PIC1_DATA,0x20);io_wait(); outb(PIC2_DATA,0x28);io_wait();
-    outb(PIC1_DATA,0x04);io_wait(); outb(PIC2_DATA,0x02);io_wait();
-    outb(PIC1_DATA,0x01);io_wait(); outb(PIC2_DATA,0x01);io_wait();
-    outb(PIC1_DATA,0xF8);   // IRQ0,1,2 unmasked
-    outb(PIC2_DATA,0xEF);   // IRQ12 unmasked
+    idt_outb(PIC1_CMD,0x11);io_wait();  idt_outb(PIC2_CMD,0x11);io_wait();
+    idt_outb(PIC1_DATA,0x20);io_wait(); idt_outb(PIC2_DATA,0x28);io_wait();
+    idt_outb(PIC1_DATA,0x04);io_wait(); idt_outb(PIC2_DATA,0x02);io_wait();
+    idt_outb(PIC1_DATA,0x01);io_wait(); idt_outb(PIC2_DATA,0x01);io_wait();
+    idt_outb(PIC1_DATA,0xF8);   // IRQ0,1,2 unmasked
+    idt_outb(PIC2_DATA,0xEF);   // IRQ12 unmasked
 }
 
 static void kbd_irq_handler(void) {
-    uint8_t sc = inb(0x60);
+    uint8_t sc = idt_inb(0x60);
     kbd_enqueue_scancode(sc);
 }
 
@@ -60,6 +60,6 @@ void irq_register(int irq,irq_handler_t handler){
 
 void irq_dispatch(int irq){
     if(irq_handlers[irq]) irq_handlers[irq]();
-    if(irq>=8) outb(PIC2_CMD,0x20);
-    outb(PIC1_CMD,0x20);
+    if(irq>=8) idt_outb(PIC2_CMD,0x20);
+    idt_outb(PIC1_CMD,0x20);
 }
