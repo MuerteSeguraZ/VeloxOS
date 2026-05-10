@@ -4,9 +4,13 @@
 static idt_entry_t   idt[IDT_ENTRIES];
 static idt_ptr_t     idt_ptr;
 static irq_handler_t irq_handlers[16];
-
-/* Separate table for LAPIC-delivered vectors (0x30–0xFF) */
 static irq_handler_t lapic_handlers[256];
+
+/* Flipped to 1 once IOAPIC takes over from the PIC */
+static int g_apic_eoi = 0;
+
+/* Forward declaration — avoids pulling lapic.h into idt.c */
+extern void lapic_eoi(void);
 
 static inline void idt_outb(uint16_t port, uint8_t val) {
     __asm__ volatile("outb %0,%1"::"a"(val),"Nd"(port));
@@ -18,7 +22,6 @@ static inline uint8_t idt_inb(uint16_t port) {
 }
 static inline void io_wait(void) { idt_outb(0x80, 0); }
 
-/* PIC IRQ stubs */
 extern void irq_stub_0(void);  extern void irq_stub_1(void);
 extern void irq_stub_2(void);  extern void irq_stub_3(void);
 extern void irq_stub_4(void);  extern void irq_stub_5(void);
@@ -28,11 +31,7 @@ extern void irq_stub_10(void); extern void irq_stub_11(void);
 extern void irq_stub_12(void); extern void irq_stub_13(void);
 extern void irq_stub_14(void); extern void irq_stub_15(void);
 
-/* LAPIC stubs */
-extern void lapic_stub_0x40(void);   /* LAPIC periodic timer */
-
-/* Forward declaration — avoids pulling lapic.h into idt.c */
-extern void lapic_eoi(void);
+extern void lapic_stub_0x40(void);
 
 static void idt_set(int n, uint64_t h) {
     idt[n].offset_low  = h & 0xFFFF;
@@ -63,7 +62,6 @@ static void kbd_irq_handler(void) {
 }
 
 void idt_init(void) {
-    /* PIC IRQs: vectors 0x20–0x2F */
     idt_set(0x20, (uint64_t)irq_stub_0);
     idt_set(0x21, (uint64_t)irq_stub_1);
     idt_set(0x22, (uint64_t)irq_stub_2);
@@ -81,7 +79,6 @@ void idt_init(void) {
     idt_set(0x2E, (uint64_t)irq_stub_14);
     idt_set(0x2F, (uint64_t)irq_stub_15);
 
-    /* LAPIC timer: vector 0x40 */
     idt_set(0x40, (uint64_t)lapic_stub_0x40);
 
     idt_ptr.limit = sizeof(idt) - 1;
@@ -99,18 +96,27 @@ void irq_register(int irq, irq_handler_t handler) {
         irq_handlers[irq] = handler;
 }
 
-/* Called by PIC stubs — sends PIC EOI */
 void irq_dispatch(int irq) {
     if (irq_handlers[irq]) irq_handlers[irq]();
-    if (irq >= 8) idt_outb(PIC2_CMD, 0x20);
-    idt_outb(PIC1_CMD, 0x20);
+
+    if (g_apic_eoi) {
+        /* IOAPIC-delivered: acknowledge via LAPIC */
+        lapic_eoi();
+    } else {
+        /* Legacy PIC-delivered: acknowledge via 8259 */
+        if (irq >= 8) idt_outb(PIC2_CMD, 0x20);
+        idt_outb(PIC1_CMD, 0x20);
+    }
+}
+
+void idt_enable_apic_eoi(void) {
+    g_apic_eoi = 1;
 }
 
 void lapic_vector_register(uint8_t vec, irq_handler_t handler) {
     lapic_handlers[vec] = handler;
 }
 
-/* Called by LAPIC stubs — sends LAPIC EOI, never touches PIC */
 void lapic_dispatch(uint8_t vec) {
     if (lapic_handlers[vec]) lapic_handlers[vec]();
     lapic_eoi();

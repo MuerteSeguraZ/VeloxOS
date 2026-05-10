@@ -98,3 +98,15 @@ void lapic_send_ipi(uint8_t dest, uint8_t vec) {
     reg_write(LAPIC_ICR_LO, (uint32_t)vec | (1u << 14));
     while (reg_read(LAPIC_ICR_LO) & (1u << 12));
 }
+
+void pic_disable(void) {
+    /* Mask every IRQ line on both PIC chips */
+    outb(0xA1, 0xFF);
+    outb(0x21, 0xFF);
+
+    /* LINT0 was in ExtINT mode passing PIC output through —
+     * now the PIC is silent so mask it */
+    reg_write(LAPIC_LVT_LINT0, LVT_MASKED);
+
+    DPRINT("[LAPIC] 8259 PIC disabled, LINT0 masked\n");
+}

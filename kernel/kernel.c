@@ -83,19 +83,14 @@ void kernel_main(uint32_t mb2_info_phys) {
     DPRINT("\n=== Velox OS Kernel Boot ===\n\n");
 
     /* ── ACPI + APIC ─────────────────────────────────────────────────── */
-    DPRINT("Initializing ACPI...\n");
     if (acpi_init(rsdp_addr) == 0) {
         acpi_info_t *acpi = acpi_get_info();
 
-        DPRINT("Initializing Local APIC...\n");
         lapic_init(acpi->lapic_phys);
-
-        /* Register handler before enabling the timer */
         lapic_vector_register(0x40, lapic_timer_handler);
         lapic_timer_init(100, 0x40);
 
         if (acpi->ioapic_phys) {
-            DPRINT("Initializing I/O APIC...\n");
             ioapic_override_t ov[ACPI_MAX_OVERRIDES];
             for (int i = 0; i < acpi->override_count; i++) {
                 ov[i].source_irq = acpi->overrides[i].source_irq;
@@ -104,12 +99,23 @@ void kernel_main(uint32_t mb2_info_phys) {
             }
             ioapic_init(acpi->ioapic_phys, acpi->ioapic_gsi_base,
                         ov, acpi->override_count);
-            /* Keyboard and mouse intentionally left on legacy PIC */
+
+            uint8_t bsp = lapic_id();
+
+            ioapic_map_irq(0,  0x20, bsp);   /* PIT timer  */
+            ioapic_map_irq(1,  0x21, bsp);   /* keyboard   */
+            ioapic_map_irq(12, 0x2C, bsp);   /* PS/2 mouse */
+
+            pic_disable();
+            idt_enable_apic_eoi();
+
+            DPRINT("IOAPIC routing active, 8259 PIC disabled\n\n");
         }
-        DPRINT("APIC ready\n\n");
     } else {
         DPRINT("ACPI not found, using PIT/PIC only\n\n");
     }
+
+    pit_init(60);
 
     /* ── PCI ─────────────────────────────────────────────────────────── */
     DPRINT("Initializing PCI bus...\n");
