@@ -35,6 +35,9 @@ SRCS_C = kernel/kernel.c                    \
          kernel/arch/idt.c                  \
          kernel/arch/pit.c                  \
          kernel/apps/explorer.c             \
+				 kernel/arch/acpi.c                 \
+				 kernel/drivers/apic/lapic.c        \
+				 kernel/drivers/apic/ioapic.c       \
 
 SRCS_S = kernel/arch/boot.asm \
          kernel/arch/isr.asm
