@@ -843,6 +843,42 @@ void desktop_mouse_move(int dx, int dy, int btn_left, int btn_right) {
     if (lc) {
         if (input_box.visible)  { input_handle_click(desktop.mx, desktop.my); desktop.needs_full_redraw = 1; goto done; }
         if (ctx_menu.visible)   { menu_handle_click(desktop.mx, desktop.my);  desktop.needs_full_redraw = 1; goto done; }
+        {
+            int tb_y  = (int)fb.height - TASKBAR_HEIGHT;
+            int btn_h = TASKBAR_HEIGHT - 8;
+            int btn_y = tb_y + 4;
+            if (desktop.my >= btn_y && desktop.my < btn_y + btn_h) {
+                if (desktop.mx >= 66 && desktop.mx < 132) {
+                    action_open_explorer();
+                    desktop.needs_full_redraw = 1;
+                    goto done;
+                }
+                int wx = 140;
+                for (window_node_t *node = desktop.windows; node; node = node->next) {
+                    window_t *w = node->win;
+                    if (!w->visible && !w->minimized) { wx += 118; continue; }
+                    if (desktop.mx >= wx && desktop.mx < wx + 110) {
+                        if (w->minimized) {
+                            // Restore the window
+                            w->minimized = 0;
+                            w->visible   = 1;
+                            desktop.active_win = node;
+                        } else if (node == desktop.active_win) {
+                            w->minimized = 1;
+                            w->visible   = 0;
+                            desktop.active_win = NULL;
+                        } else {
+                            desktop.active_win = node;
+                        }
+                        desktop.needs_full_redraw = 1;
+                        goto done;
+                    }
+                    wx += 118;
+                }
+
+                goto done;
+            }
+        }
 
         window_node_t *topmost = NULL;
         for (window_node_t *node = desktop.windows; node; node = node->next) {
