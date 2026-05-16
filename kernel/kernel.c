@@ -2,6 +2,7 @@
 #include "arch/acpi.h"
 #include "drivers/apic/lapic.h"
 #include "drivers/apic/ioapic.h"
+#include "sched/scheduler.h"
 
 #define MB2_TAG_END         0
 #define MB2_TAG_FRAMEBUFFER 8
@@ -31,9 +32,7 @@ extern void lapic_vector_register(uint8_t vec, irq_handler_t handler);
 #define HEAP_SIZE  0x2000000ULL
 
 static void lapic_timer_handler(void) {
-    /* LAPIC timer fires at 100 Hz.
-     * EOI is sent by lapic_dispatch after this returns.
-     * Add any future per-tick work here. */
+    sched_tick();
 }
 
 void kernel_main(uint32_t mb2_info_phys) {
@@ -77,6 +76,7 @@ void kernel_main(uint32_t mb2_info_phys) {
 
     fb_init(fb_addr, fb_pitch, fb_width, fb_height, fb_bpp, backbuf);
     idt_init();
+    sched_init();
     pit_init(60);
 
     DPRINT_INIT();

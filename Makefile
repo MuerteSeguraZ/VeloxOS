@@ -38,9 +38,12 @@ SRCS_C = kernel/kernel.c                    \
 				 kernel/arch/acpi.c                 \
 				 kernel/drivers/apic/lapic.c        \
 				 kernel/drivers/apic/ioapic.c       \
+				 kernel/sched/scheduler.c           \
+
 
 SRCS_S = kernel/arch/boot.asm \
-         kernel/arch/isr.asm
+         kernel/arch/isr.asm  \
+				 kernel/sched/sched_context.asm
 
 # Map all sources to obj/ directory preserving subdir structure
 OBJS_C = $(patsubst kernel/%.c, obj/%.o, $(SRCS_C))
