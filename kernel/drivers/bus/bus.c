@@ -4,14 +4,12 @@
 static bus_device_t devices[MAX_DEVICES];
 static int device_count = 0;
 
-// Helper: string copy
 static void str_cpy(char *d, const char *s, int max) {
     int i = 0;
     while (s[i] && i < max - 1) { d[i] = s[i]; i++; }
     d[i] = 0;
 }
 
-// Helper: string compare
 static int str_eq(const char *a, const char *b) {
     while (*a && *b && *a == *b) { a++; b++; }
     return *a == *b;
@@ -40,18 +38,15 @@ int bus_enumerate(void) {
 
         if (!d->enabled) continue;
 
-        // Probe device
         if (d->probe) {
             d->probe_result = d->probe();
             d->probed = 1;
-            if (!d->probe_result) continue;  // Device not present
+            if (!d->probe_result) continue;
         } else {
-            // No probe function = assume present
             d->probe_result = 1;
             d->probed = 1;
         }
 
-        // Initialize device
         if (d->init) {
             if (d->init()) {
                 d->initialized = 1;

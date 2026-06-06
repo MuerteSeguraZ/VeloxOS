@@ -8,7 +8,6 @@
 static pci_device_t devices[PCI_MAX_DEVICES];
 static int device_count = 0;
 
-// ── PCI Config I/O ────────────────────────────────────────────────────────────
 uint32_t pci_config_read_dword(uint8_t bus, uint8_t slot, uint8_t func, uint8_t offset) {
     uint32_t address = (1 << 31) | (bus << 16) | (slot << 11) | (func << 8) | (offset & 0xFC);
     outl(PCI_CONFIG_ADDRESS, address);
@@ -45,7 +44,6 @@ void pci_config_write_byte(uint8_t bus, uint8_t slot, uint8_t func, uint8_t offs
     pci_config_write_dword(bus, slot, func, offset, dword);
 }
 
-// ── Hex formatting helper ──────────────────────────────────────────────────────
 static void _hex_to_str(uint32_t val, char *buf, int width) {
     int i = width - 1;
     while (i >= 0) {
@@ -54,7 +52,6 @@ static void _hex_to_str(uint32_t val, char *buf, int width) {
     }
 }
 
-// ── PCI Enumeration ───────────────────────────────────────────────────────────
 void pci_init(void) {
     device_count = 0;
 }
@@ -70,8 +67,7 @@ int pci_enumerate(void) {
         for (int slot = 0; slot < 32; slot++) {
             for (int func = 0; func < 8; func++) {
                 uint16_t vendor_id = pci_config_read_word(bus, slot, func, 0);
-                
-                // 0xFFFF = no device
+
                 if (vendor_id == 0xFFFF) continue;
                 
                 if (device_count >= PCI_MAX_DEVICES) {
@@ -84,68 +80,58 @@ int pci_enumerate(void) {
                 dev->bus = bus;
                 dev->slot = slot;
                 dev->function = func;
-                
-                // Read header
+
                 dev->vendor_id = vendor_id;
                 dev->device_id = pci_config_read_word(bus, slot, func, 2);
                 dev->class_code = pci_config_read_byte(bus, slot, func, 0x0B);
                 dev->subclass = pci_config_read_byte(bus, slot, func, 0x0A);
                 dev->prog_if = pci_config_read_byte(bus, slot, func, 0x09);
                 dev->revision_id = pci_config_read_byte(bus, slot, func, 0x08);
-                
-                // Read BARs (Base Address Registers)
+
                 dev->bar0 = pci_config_read_dword(bus, slot, func, 0x10);
                 dev->bar1 = pci_config_read_dword(bus, slot, func, 0x14);
                 dev->bar2 = pci_config_read_dword(bus, slot, func, 0x18);
                 dev->bar3 = pci_config_read_dword(bus, slot, func, 0x1C);
                 dev->bar4 = pci_config_read_dword(bus, slot, func, 0x20);
                 dev->bar5 = pci_config_read_dword(bus, slot, func, 0x24);
-                
-                // Read subsystem IDs
+
                 dev->subsystem_vendor_id = pci_config_read_word(bus, slot, func, 0x2C);
                 dev->subsystem_id = pci_config_read_word(bus, slot, func, 0x2E);
-                
-                // Read IRQ
+
                 dev->irq_line = pci_config_read_byte(bus, slot, func, 0x3C);
-                
-                // Print device info
+
                 char line[96];
                 int len = 0;
                 
                 const char *p = "Device ";
                 while (*p) line[len++] = *p++;
-                
-                // Device number
+
                 char num[4];
                 _hex_to_str(found, num, 1);
                 line[len++] = num[0];
                 
                 p = ": [";
                 while (*p) line[len++] = *p++;
-                
-                // Bus
+
                 _hex_to_str(dev->bus, num, 2);
                 line[len++] = num[0];
                 line[len++] = num[1];
                 
                 p = ":";
                 while (*p) line[len++] = *p++;
-                
-                // Slot
+
                 _hex_to_str(dev->slot, num, 2);
                 line[len++] = num[0];
                 line[len++] = num[1];
                 
                 p = ":";
                 while (*p) line[len++] = *p++;
-                
-                // Function
+
                 line[len++] = "0123456789ABCDEF"[dev->function & 0xF];
                 
                 p = "] ";
                 while (*p) line[len++] = *p++;
-                
-                // Vendor:Device
+
                 _hex_to_str(dev->vendor_id, num, 4);
                 for (int i = 0; i < 4; i++) line[len++] = num[i];
                 
@@ -158,8 +144,7 @@ int pci_enumerate(void) {
                 line[len] = 0;
                 
                 DPRINT(line);
-                
-                // Print details
+
                 DPRINT("  Class: ");
                 DPRINT_HEX(dev->class_code);
                 DPRINT(" Subclass: ");
@@ -189,8 +174,7 @@ done:
     
     const char *sp = "Total devices found: ";
     while (*sp) summary[slen++] = *sp++;
-    
-    // Print count
+
     if (found >= 10) summary[slen++] = '0' + (found / 10);
     summary[slen++] = '0' + (found % 10);
     
@@ -220,7 +204,6 @@ int pci_get_device_count(void) {
     return device_count;
 }
 
-// ── Class Names ───────────────────────────────────────────────────────────────
 static const char *pci_class_name(uint8_t class_code) {
     switch (class_code) {
         case 0x00: return "Unclassified";
@@ -254,7 +237,6 @@ void pci_print_devices(void) {
         char status[64];
         int si = 0;
         const char *p = dev->vendor_id;
-        // (simplified framebuffer output)
         y += 16;
     }
 }

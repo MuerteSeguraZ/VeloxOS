@@ -6,7 +6,6 @@
 #define MENU_WIDTH      160
 #define MENU_PADDING    6
 
-// ── Colors ────────────────────────────────────────────────────────────────────
 #define COL_MENU_BG       0x12121e
 #define COL_MENU_BORDER   0x4a7fa5
 #define COL_MENU_HOVER    0x1e3a5f
@@ -20,13 +19,13 @@ typedef void (*menu_action_t)(void);
 typedef struct {
     char          label[32];
     menu_action_t action;
-    int           separator;    // 1 = draw a divider line instead of a label
+    int           separator;
 } menu_item_t;
 
 typedef struct {
     int         visible;
     int         x, y;
-    int         hovered;        // index of hovered item, -1 = none
+    int         hovered;
     menu_item_t items[MENU_MAX_ITEMS];
     int         nitems;
 } context_menu_t;
@@ -39,7 +38,5 @@ void menu_add_separator(void);
 void menu_show(int x, int y);
 void menu_hide(void);
 void menu_draw(void);
-
-// Returns 1 if menu consumed the click, 0 if click was outside
 int  menu_handle_click(int mx, int my);
 void menu_handle_hover(int mx, int my);

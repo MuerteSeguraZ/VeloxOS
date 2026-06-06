@@ -10,13 +10,11 @@
 
 desktop_t desktop;
 
-// ── RNG ───────────────────────────────────────────────────────────────────────
 static uint32_t rng = 0xdeadbeef;
 static uint32_t rng_next(void) {
     rng ^= rng << 13; rng ^= rng >> 17; rng ^= rng << 5; return rng;
 }
 
-// ── Cursor ────────────────────────────────────────────────────────────────────
 static const uint8_t cursor_bmp[CURSOR_H][CURSOR_W] = {
     {1,0,0,0,0,0,0,0,0,0,0,0},{1,1,0,0,0,0,0,0,0,0,0,0},
     {1,2,1,0,0,0,0,0,0,0,0,0},{1,2,2,1,0,0,0,0,0,0,0,0},
@@ -28,11 +26,8 @@ static const uint8_t cursor_bmp[CURSOR_H][CURSOR_W] = {
 
 static int selected_icon_ctx = VFS_ROOT_PARENT;
 
-// ── Icon grid positions ───────────────────────────────────────────────────────
 static int icon_col[VFS_MAX_FILES];
 static int icon_row[VFS_MAX_FILES];
-
-// ── Icon drag state ───────────────────────────────────────────────────────────
 static int icon_dragging          = 0;
 static int drag_icon_idx          = -1;
 static int drag_px                = 0;
@@ -42,11 +37,8 @@ static int drag_oy                = 0;
 static int drag_moved             = 0;
 static int icon_drag_was_selected = 0;
 
-// ── Special desktop icons ─────────────────────────────────────────────────────
 #define DESKTOP_EXPLORER_IDX  99999
 
-// ── Window overlap detection ──────────────────────────────────────────────────
-// ── Forward declarations ──────────────────────────────────────────────────────
 static void cell_to_px(int c, int r, int *px, int *py);
 static void icon_get_pos(int idx, int *ox, int *oy);
 static void icons_assign_slots(void);
@@ -58,24 +50,21 @@ static int windows_overlap(int x1, int y1, int w1, int h1,
 }
 
 static int window_position_free(int x, int y, int w, int h) {
-    // Check against existing windows
     for (window_node_t *node = desktop.windows; node; node = node->next) {
         if (windows_overlap(x, y, w, h, 
                            node->win->x, node->win->y, 
                            node->win->w, node->win->h)) {
-            return 0;  // Overlaps with window
+            return 0;
         }
     }
     
-    // Check against Explorer icon
-    int explorer_ix = ICON_GRID_X + ICON_CELL_W;  // Second column
-    int explorer_iy = ICON_GRID_Y;                  // Same row
+    int explorer_ix = ICON_GRID_X + ICON_CELL_W;
+    int explorer_iy = ICON_GRID_Y;
     if (windows_overlap(x, y, w, h, explorer_ix, explorer_iy, 
                        ICON_W, ICON_H + ICON_LABEL_H)) {
-        return 0;  // Overlaps with Explorer icon
+        return 0;
     }
-    
-    // Check against desktop file icons
+
     if (vfs.mounted) {
         for (int i = 0; i < VFS_MAX_FILES; i++) {
             if (!vfs.entries[i].used) continue;
@@ -83,24 +72,22 @@ static int window_position_free(int x, int y, int w, int h) {
             int ix, iy;
             icon_get_pos(i, &ix, &iy);
             if (windows_overlap(x, y, w, h, ix, iy, ICON_W, ICON_H + ICON_LABEL_H)) {
-                return 0;  // Overlaps with icon
+                return 0;
             }
         }
     }
     
-    return 1;  // Free
+    return 1;
 }
 
 static void find_free_window_pos(int req_x, int req_y, int w, int h,
                                 int *out_x, int *out_y) {
-    // Try requested position first
     if (window_position_free(req_x, req_y, w, h)) {
         *out_x = req_x;
         *out_y = req_y;
         return;
     }
 
-    // Try positions: cascade down and right
     int offsets[][2] = {
         {0, 60},      // Below
         {60, 0},      // Right
@@ -118,7 +105,6 @@ static void find_free_window_pos(int req_x, int req_y, int w, int h,
         int try_x = req_x + offsets[i][0];
         int try_y = req_y + offsets[i][1];
 
-        // Keep window on screen
         if (try_x < 0) try_x = 0;
         if (try_y < 0) try_y = 0;
         if (try_x + w > (int)fb.width) try_x = fb.width - w - 10;
@@ -132,7 +118,6 @@ static void find_free_window_pos(int req_x, int req_y, int w, int h,
         }
     }
 
-    // Fallback: cascade positions if everything else is taken
     *out_x = 40;
     *out_y = 40;
 }
@@ -143,7 +128,6 @@ static int grid_cols(void) {
 }
 
 static int cell_taken(int c, int r, int exclude) {
-    // Check if Explorer icon occupies this cell (Explorer is at column 1, row 0)
     if (c == 1 && r == 0) return 1;
     
     for (int i = 0; i < VFS_MAX_FILES; i++) {
@@ -201,8 +185,7 @@ static int snap_to_grid(int px, int py, int exclude, int *out_c, int *out_r) {
 
 static int icon_at(int mx, int my) {
     if (!vfs.mounted) return -1;
-    
-    // Check Explorer desktop icon first (top-left corner)
+
     int explorer_ix = ICON_GRID_X + ICON_CELL_W;
     int explorer_iy = ICON_GRID_Y;
     if (mx >= explorer_ix && mx < explorer_ix + ICON_W && 
@@ -234,12 +217,10 @@ static int icon_at_in_folder(int mx, int my, int wx, int wy, int ww, int parent_
     return -1;
 }
 
-// ── Pending close ─────────────────────────────────────────────────────────────
 static window_node_t *pending_close_node = NULL;
 
 static void do_close_window(window_node_t *node) {
     if (!node) return;
-    // Destroy explorer instance if present
     if (node->win->explorer) {
         explorer_destroy(node->win->explorer);
         node->win->explorer = NULL;
@@ -301,12 +282,10 @@ static void try_close_window(window_node_t *node) {
     }
 }
 
-// ── Open file/folder ──────────────────────────────────────────────────────────
 static void open_entry(int fs_idx) {
     vfs_entry_t *e = &vfs.entries[fs_idx];
     if (!e->used) return;
 
-    // Already open?
     for (window_node_t *node = desktop.windows; node; node = node->next) {
         window_t *w = node->win;
         int m = 1;
@@ -318,7 +297,6 @@ static void open_entry(int fs_idx) {
     }
 
     if (e->is_dir) {
-        // Open folders using the Explorer app
         int final_x, final_y;
         find_free_window_pos(EXPLORER_DEFAULT_X, EXPLORER_DEFAULT_Y,
                             EXPLORER_W, EXPLORER_H, &final_x, &final_y);
@@ -351,7 +329,6 @@ static void open_entry(int fs_idx) {
     desktop.needs_full_redraw = 1;
 }
 
-// ── Menu actions ──────────────────────────────────────────────────────────────
 static int file_counter = 0, folder_counter = 0;
 static void itoa2(int n, char *b) {
     if (n >= 10) { b[0] = '0' + n / 10; b[1] = '0' + n % 10; b[2] = 0; }
@@ -395,7 +372,6 @@ static void action_new_folder(void) {
 }
 static void action_refresh(void) { desktop.needs_full_redraw = 1; }
 
-// ── Explorer launch action ────────────────────────────────────────────────────
 static void action_open_explorer(void) {
     int final_x, final_y;
     find_free_window_pos(EXPLORER_DEFAULT_X, EXPLORER_DEFAULT_Y,
@@ -410,7 +386,6 @@ static void action_open_explorer(void) {
     desktop.needs_full_redraw = 1;
 }
 
-// ── Folder-scoped new file / folder ──────────────────────────────────────────
 static int active_folder_idx = -1;
 
 static void action_new_file_in_folder(void) {
@@ -466,7 +441,6 @@ static void action_delete(void) {
     menu_icon_target = -1; desktop.needs_full_redraw = 1;
 }
 
-// ── Drawing helpers ───────────────────────────────────────────────────────────
 static void draw_wallpaper(void) {
     int dh = fb.height - TASKBAR_HEIGHT;
     fb_fill_gradient_v(0, 0, fb.width, dh, COL_DESKTOP_TOP, COL_DESKTOP_BOT);
@@ -625,7 +599,6 @@ static void draw_cursor_at(int mx, int my) {
     }
 }
 
-// ── Public API ────────────────────────────────────────────────────────────────
 void desktop_init(void) {
     desktop.windows   = NULL;
     desktop.nwindows  = 0;
@@ -715,7 +688,6 @@ void desktop_update_cursor(void) {
     fb_flip_rect(sx, sy, CURSOR_W, CURSOR_H);
 }
 
-// ── Keyboard routing ──────────────────────────────────────────────────────────
 void desktop_handle_key(const key_event_t *evt) {
     if (!evt || !evt->pressed) return;
     if (input_box.visible) { input_handle_key(evt); input_box.dirty = 1; return; }
@@ -859,7 +831,6 @@ void desktop_mouse_move(int dx, int dy, int btn_left, int btn_right) {
                     if (!w->visible && !w->minimized) { wx += 118; continue; }
                     if (desktop.mx >= wx && desktop.mx < wx + 110) {
                         if (w->minimized) {
-                            // Restore the window
                             w->minimized = 0;
                             w->visible   = 1;
                             desktop.active_win = node;

@@ -4,7 +4,6 @@
 #include "../drivers/keyboard/keyboard.h"
 #include "../ui/window.h"
 
-// ── Layout ────────────────────────────────────────────────────────────────────
 #define EXPLORER_W          520
 #define EXPLORER_H          360
 #define EXPLORER_DEFAULT_X  60
@@ -18,7 +17,6 @@
 #define EXPLO_MAX_PATH_DEPTH  8
 #define EXPLO_SIDEBAR_ITEMS   3
 
-// ── Colors ────────────────────────────────────────────────────────────────────
 #define COL_EXPLO_SIDEBAR_BG  0x0c0c18
 #define COL_EXPLO_SIDEBAR_BD  0x2a3a5a
 #define COL_EXPLO_CONTENT_BG  0x0e0e1a
@@ -40,13 +38,11 @@
 #define COL_EXPLO_BTN_BD      0x2a4a6a
 #define COL_EXPLO_BTN_HOV     0x2a3a5a
 
-// ── Navigation entry ──────────────────────────────────────────────────────────
 typedef struct {
     int  dir_idx;
     char name[VFS_NAME_MAX];
 } explo_nav_entry_t;
 
-// ── File list item ────────────────────────────────────────────────────────────
 typedef struct {
     int      fs_idx;
     char     name[VFS_NAME_MAX];
@@ -54,18 +50,17 @@ typedef struct {
     uint32_t size_bytes;
 } explo_item_t;
 
-// ── Explorer state ────────────────────────────────────────────────────────────
 typedef struct {
     explo_nav_entry_t nav_stack[EXPLO_MAX_PATH_DEPTH];
     int               nav_depth;
 
     explo_item_t      items[VFS_MAX_FILES];
     int               item_count;
-    int               selected;        // index into items[], -1 = none
-    int               scroll;          // first visible row
-    int               hover;           // row under cursor, -1 = none
-    int               rename_target;   // items[] index, -1 = none
-    int               sidebar_hover;   // -1 or 0..EXPLO_SIDEBAR_ITEMS-1
+    int               selected;
+    int               scroll;
+    int               hover;
+    int               rename_target;
+    int               sidebar_hover;
     int               btn_back_hover;
     int               btn_up_hover;
     int               btn_refresh_hover;
@@ -73,12 +68,11 @@ typedef struct {
     int               btn_newfolder_hover;
     int               btn_delete_hover;
     int               needs_refresh;
-    void             *window_node;     // cast to window_node_t* where needed
+    void             *window_node;
     int               file_counter;
     int               folder_counter;
 } explorer_t;
 
-// ── Public API ────────────────────────────────────────────────────────────────
 explorer_t *explorer_create(void);
 void        explorer_destroy(explorer_t *ex);
 void        explorer_draw(explorer_t *ex, window_t *win, int active);

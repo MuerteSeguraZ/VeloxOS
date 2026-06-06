@@ -10,10 +10,9 @@ typedef struct {
     uint8_t hours;
     uint8_t day;
     uint8_t month;
-    uint8_t year;   // 2-digit year
+    uint8_t year;
 } rtc_time_t;
 
 void rtc_read(rtc_time_t *t);
 
-// Format "HH:MM:SS" into buf (must be at least 9 bytes)
 void rtc_format_time(const rtc_time_t *t, char *buf);

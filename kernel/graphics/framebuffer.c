@@ -11,13 +11,11 @@ void fb_init(uint64_t addr, uint32_t pitch, uint32_t width,
     fb.bpp     = bpp;
     fb.backbuf = (uint32_t *)backbuf;
 
-    // Clear back buffer
     uint32_t npixels = width * height;
     for (uint32_t i = 0; i < npixels; i++)
         fb.backbuf[i] = 0;
 }
 
-// ── Back buffer drawing ───────────────────────────────────────────────────────
 
 static inline int clamp_x(int x) {
     return (x < 0) ? 0 : (x >= (int)fb.width  ? (int)fb.width  - 1 : x);
@@ -83,8 +81,6 @@ void fb_fill_gradient_h(int x, int y, int w, int h, uint32_t left, uint32_t righ
         fb_fill_rect(x+col, y, 1, h, c);
     }
 }
-
-// ── Blit operations ───────────────────────────────────────────────────────────
 
 void fb_flip(void) {
     uint8_t *screen = (uint8_t *)fb.addr;

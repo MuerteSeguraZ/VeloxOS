@@ -44,7 +44,6 @@ void ioapic_init(uint64_t phys_base, uint32_t gsi_base,
     g_ovr_count = count < 24 ? count : 24;
     for (int i = 0; i < g_ovr_count; i++) g_ovr[i] = ovr[i];
 
-    /* Mask every entry — nothing fires until explicitly mapped */
     for (uint32_t i = 0; i < g_max_rte; i++)
         rte_write(g_gsi_base + i, RTE_MASKED | 0xFFu);
 
@@ -68,8 +67,7 @@ void ioapic_map_irq(uint8_t irq, uint8_t vector, uint8_t dest) {
     uint64_t rte = (uint64_t)vector;
     if (active_low) rte |= RTE_ACTIVE_LOW;
     if (level)      rte |= RTE_LEVEL;
-    rte |= ((uint64_t)dest << 56);   /* physical destination */
-    /* not masked — ready to fire */
+    rte |= ((uint64_t)dest << 56);
     rte_write(gsi, rte);
 }
 

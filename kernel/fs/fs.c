@@ -57,12 +57,10 @@ static uint32_t alloc_sectors(uint32_t count) {
     return next;
 }
 
-// ── Internal create ───────────────────────────────────────────────────────────
 static int create_entry(const char *name, int is_dir, int parent_idx) {
     if(!vfs.mounted)return -1;
     if(str_len(name)>=VFS_NAME_MAX)return -1;
 
-    // No duplicates within same parent
     if(vfs_find_in(name,parent_idx)>=0)return -1;
 
     int idx=-1;
@@ -87,8 +85,6 @@ static int create_entry(const char *name, int is_dir, int parent_idx) {
     if(!flush_superblock()) return -1;
     return idx;
 }
-
-// ── Public API ────────────────────────────────────────────────────────────────
 
 int vfs_format(int bus, int drive) {
     vfs.bus=bus; vfs.drive=drive; vfs.mounted=0;
@@ -118,7 +114,6 @@ int vfs_create(const char *name, int is_dir) {
 }
 
 int vfs_create_in(const char *name, int is_dir, int parent_idx) {
-    // Validate parent is actually a directory
     if(parent_idx!=VFS_ROOT_PARENT){
         if(parent_idx<0||parent_idx>=VFS_MAX_FILES)return -1;
         if(!vfs.entries[parent_idx].used||!vfs.entries[parent_idx].is_dir)return -1;
@@ -173,7 +168,6 @@ int vfs_delete(int idx) {
     if(!vfs.mounted||idx<0||idx>=VFS_MAX_FILES)return 0;
     if(!vfs.entries[idx].used)return 0;
 
-    // If it's a directory, also delete its children recursively
     if(vfs.entries[idx].is_dir){
         for(int i=0;i<VFS_MAX_FILES;i++){
             if(vfs.entries[i].used&&(int)vfs.entries[i].parent_idx==idx)
@@ -182,7 +176,6 @@ int vfs_delete(int idx) {
     }
 
     mem_set(&vfs.entries[idx],0,sizeof(vfs_entry_t));
-    // parent_idx zero after memset — set to root explicitly
     vfs.entries[idx].parent_idx=(int16_t)VFS_ROOT_PARENT;
     vfs.sb.file_count--;
     if(!flush_table())      return 0;

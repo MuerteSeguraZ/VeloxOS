@@ -32,26 +32,21 @@ void window_set_editable(window_t *win,const char *text,uint32_t len,int fs_idx)
     win->fs_idx=fs_idx; win->scroll_row=0;
 }
 
-// Takes a key_event_t — no scancode tables here
 int window_handle_key(window_t *win, const key_event_t *evt){
     if(!win->editable||!win->visible||!evt->pressed)return 0;
 
-    // Backspace
     if(evt->scancode==KEY_BACKSPACE){
         if(win->edit_len>0){win->edit_buf[--win->edit_len]=0;win->edit_dirty=1;}
         return 1;
     }
 
-    // Escape — deselect / unfocus (caller handles)
     if(evt->scancode==KEY_ESCAPE)return 1;
 
-    // Printable + Enter (\n)
     if(evt->ascii&&win->edit_len<WIN_CONTENT_MAX-1){
         win->edit_buf[win->edit_len++]=evt->ascii;
         win->edit_buf[win->edit_len]=0;
         win->edit_dirty=1;
 
-        // Auto-scroll
         int max_cols=(win->w-24)/(8+1); if(max_cols<1)max_cols=1;
         int max_rows=(win->h-TITLEBAR_HEIGHT-24)/(8+3); if(max_rows<1)max_rows=1;
         int row=0,col=0;
@@ -102,7 +97,6 @@ void window_draw(window_t *win,int active){
     if(win->has_content||win->editable){
         fb_fill_rect(x+w-8,y+TITLEBAR_HEIGHT,6,h-TITLEBAR_HEIGHT,0x0a0a14);
 
-        // Count total rows for scrollbar
         const char *pp=src; int tot=0,tc=0;
         while(*pp){if(*pp=='\n'||tc>=max_cols){tot++;tc=0;}else tc++;pp++;}tot++;
         if(tot>max_rows){
@@ -111,7 +105,6 @@ void window_draw(window_t *win,int active){
             fb_fill_rect(x+w-7,y+TITLEBAR_HEIGHT+ty2,4,th,0x4a7fa5);
         }
 
-        // Render
         const char *p=src; int row=0,col=0;
         while(*p){
             if(*p=='\n'){row++;col=0;p++;if(row-win->scroll_row>=max_rows)break;continue;}
@@ -121,7 +114,6 @@ void window_draw(window_t *win,int active){
             col++;p++;
         }
 
-        // Cursor
         if(win->editable&&active){
             const char *ep=win->edit_buf; int cr=0,cc=0;
             while(*ep){if(*ep=='\n'||cc>=max_cols){cr++;cc=0;}else cc++;ep++;}
@@ -129,10 +121,8 @@ void window_draw(window_t *win,int active){
             if(dr>=0&&dr<max_rows)fb_fill_rect(cx+cc*(8+1),cy+dr*(8+3),2,8,COL_TEXT_CURSOR);
         }
     } else if(win->folder_idx >= 0) {
-        // Background tint only — icons are drawn by desktop_redraw via draw_folder_icons
         fb_fill_rect(cx-4, cy-4, max_w+8, max_h+8, 0x0c0c1a);
 
-        // Show hint if folder is empty
         int has_children=0;
         for(int i=0;i<VFS_MAX_FILES;i++){
             if(!vfs.entries[i].used)continue;

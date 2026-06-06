@@ -29,13 +29,11 @@ void menu_add_separator(void) {
 }
 
 void menu_show(int x, int y) {
-    // Calculate menu height
     int total_h = MENU_PADDING;
     for (int i = 0; i < ctx_menu.nitems; i++)
         total_h += ctx_menu.items[i].separator ? 7 : MENU_ITEM_H;
     total_h += MENU_PADDING;
 
-    // Clamp to screen
     if (x + MENU_WIDTH > (int)fb.width)  x = fb.width  - MENU_WIDTH - 2;
     if (y + total_h   > (int)fb.height)  y = fb.height - total_h    - 2;
 
@@ -50,7 +48,6 @@ void menu_hide(void) {
     ctx_menu.hovered = -1;
 }
 
-// Calculate the y position of item i inside the menu
 static int item_y(int i) {
     int y = ctx_menu.y + MENU_PADDING;
     for (int j = 0; j < i; j++)
@@ -73,41 +70,29 @@ void menu_draw(void) {
     int w = MENU_WIDTH;
     int h = menu_height();
 
-    // Shadow
     fb_fill_rect(x + 4, y + 4, w, h, COL_MENU_SHADOW);
-
-    // Background
     fb_fill_rect(x, y, w, h, COL_MENU_BG);
-
-    // Border
     fb_draw_rect(x, y, w, h, COL_MENU_BORDER);
-
-    // Inner highlight line at top
     fb_draw_hline(x + 1, y + 1, w - 2, 0x2a4a6a);
 
-    // Items
     for (int i = 0; i < ctx_menu.nitems; i++) {
         menu_item_t *item = &ctx_menu.items[i];
         int iy = item_y(i);
 
         if (item->separator) {
-            // Divider line centered vertically in 7px slot
             fb_draw_hline(x + 8, iy + 3, w - 16, COL_MENU_SEP);
             continue;
         }
 
-        // Hover highlight
         if (i == ctx_menu.hovered) {
             fb_fill_rect(x + 1, iy, w - 2, MENU_ITEM_H, COL_MENU_HOVER);
             fb_draw_hline(x + 1, iy,                  w - 2, 0x2a5a8a);
             fb_draw_hline(x + 1, iy + MENU_ITEM_H - 1, w - 2, 0x1a3a5a);
         }
 
-        // Icon placeholder dot
         fb_fill_rect(x + 8, iy + MENU_ITEM_H/2 - 2, 4, 4,
                      i == ctx_menu.hovered ? 0x80c0ff : 0x405070);
 
-        // Label
         text_puts(x + 18, iy + (MENU_ITEM_H - GLYPH_H) / 2,
                   item->label,
                   i == ctx_menu.hovered ? COL_MENU_TEXT : COL_MENU_TEXT_DIM,
@@ -123,13 +108,11 @@ int menu_handle_click(int mx, int my) {
     int w = MENU_WIDTH;
     int h = menu_height();
 
-    // Click outside — close menu
     if (mx < x || mx >= x + w || my < y || my >= y + h) {
         menu_hide();
-        return 1;   // consumed — don't pass click to desktop
+        return 1;
     }
 
-    // Find which item was clicked
     for (int i = 0; i < ctx_menu.nitems; i++) {
         menu_item_t *item = &ctx_menu.items[i];
         if (item->separator) continue;
@@ -141,7 +124,7 @@ int menu_handle_click(int mx, int my) {
         }
     }
 
-    return 1;   // click inside menu but not on item — still consumed
+    return 1;
 }
 
 void menu_handle_hover(int mx, int my) {

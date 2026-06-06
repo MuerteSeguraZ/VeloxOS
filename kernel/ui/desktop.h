@@ -16,7 +16,6 @@
 #define COL_CLOCK           0xc0d8f0
 #define COL_TRAY_BG         0x111122
 
-// ── Icon grid ─────────────────────────────────────────────────────────────────
 #define ICON_W       52
 #define ICON_H       40
 #define ICON_LABEL_H 10
@@ -25,16 +24,15 @@
 #define ICON_GRID_X  16
 #define ICON_GRID_Y  16
 
-// Window node for linked list
 typedef struct window_node {
     window_t *win;
     struct window_node *next;
 } window_node_t;
 
 typedef struct {
-    window_node_t *windows;     // Head of linked list
-    int           nwindows;     // Count of windows (for quick access)
-    window_node_t *active_win;  // Pointer to active window node (instead of index)
+    window_node_t *windows; 
+    int           nwindows;
+    window_node_t *active_win;
     int           mx, my;
     int           btn_left, btn_right;
     uint32_t      cursor_save[CURSOR_W * CURSOR_H];

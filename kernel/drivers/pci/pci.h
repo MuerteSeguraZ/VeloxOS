@@ -4,7 +4,6 @@
 
 #define PCI_MAX_DEVICES 256
 
-// PCI Configuration Space Header
 typedef struct {
     uint16_t vendor_id;
     uint16_t device_id;
@@ -20,7 +19,6 @@ typedef struct {
     uint8_t  bist;
 } pci_config_header_t;
 
-// PCI Device Info
 typedef struct {
     uint8_t  bus;
     uint8_t  slot;
@@ -37,7 +35,6 @@ typedef struct {
     uint8_t  irq_line;
 } pci_device_t;
 
-// PCI Functions
 void pci_init(void);
 int pci_enumerate(void);
 pci_device_t *pci_find_device(uint16_t vendor_id, uint16_t device_id);
@@ -45,7 +42,6 @@ pci_device_t *pci_get_device(int index);
 int pci_get_device_count(void);
 void pci_print_devices(void);
 
-// Low-level PCI I/O
 uint8_t  pci_config_read_byte(uint8_t bus, uint8_t slot, uint8_t func, uint8_t offset);
 uint16_t pci_config_read_word(uint8_t bus, uint8_t slot, uint8_t func, uint8_t offset);
 uint32_t pci_config_read_dword(uint8_t bus, uint8_t slot, uint8_t func, uint8_t offset);

@@ -2,13 +2,13 @@
 #include "../stdint.h"
 
 typedef struct block {
-    uint32_t       size;    // size of user data (not including header)
-    uint32_t       free;    // 1 = free, 0 = used
-    struct block  *next;    // next block in free list (only valid when free=1)
-    uint32_t       magic;   // 0xVLXA = valid, detect corruption
+    uint32_t       size;
+    uint32_t       free;
+    struct block  *next;
+    uint32_t       magic;
 } block_t;
 
-#define BLOCK_MAGIC  0x564C5841   // "VLXA"
+#define BLOCK_MAGIC  0x564C5841
 #define HEADER_SIZE  sizeof(block_t)
 #define MIN_SPLIT    (HEADER_SIZE + 16)
 

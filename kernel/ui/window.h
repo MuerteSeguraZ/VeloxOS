@@ -46,8 +46,8 @@ typedef struct {
     char orig_buf[WIN_CONTENT_MAX];
     int  edit_len;
     int  edit_dirty;
-    int  fs_idx;        // backing vfs entry for editable files (-1 = none)
-    int  folder_idx;    // vfs entry index if this is a folder view (-1 = not a folder)
+    int  fs_idx;
+    int  folder_idx;
     int  scroll_row;
     struct explorer_t *explorer;
 } window_t;
@@ -57,6 +57,4 @@ int  window_hit_button(window_t *win, int mx, int my);
 void window_set_content(window_t *win, const char *text, uint32_t len);
 void window_set_editable(window_t *win, const char *text, uint32_t len, int fs_idx);
 int  window_handle_key(window_t *win, const key_event_t *evt);
-
-// Set window as a folder view for vfs entry at folder_idx
 void window_set_folder(window_t *win, int folder_idx);

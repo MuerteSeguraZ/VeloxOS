@@ -1,6 +1,6 @@
 #include "ata.h"
 
-static ata_drive_t drives[2][2];  // [bus][drive]
+static ata_drive_t drives[2][2];
 
 static inline void ata_outb(uint16_t port, uint8_t val) {
     __asm__ volatile ("outb %0, %1" : : "a"(val), "Nd"(port));
@@ -22,13 +22,11 @@ static uint16_t bus_ctrl(int bus) {
     return bus == ATA_PRIMARY ? ATA_PRIMARY_CTRL : ATA_SECONDARY_CTRL;
 }
 
-// 400ns delay — read alt status 4 times
 static void ata_delay(int bus) {
     uint16_t ctrl = bus_ctrl(bus);
     ata_inb(ctrl); ata_inb(ctrl); ata_inb(ctrl); ata_inb(ctrl);
 }
 
-// Wait until BSY clears, return final status
 static uint8_t ata_wait_bsy(int bus) {
     uint16_t base = bus_base(bus);
     uint8_t  status;
@@ -40,7 +38,6 @@ static uint8_t ata_wait_bsy(int bus) {
     return status;
 }
 
-// Wait until DRQ or ERR
 static uint8_t ata_wait_drq(int bus) {
     uint16_t base = bus_base(bus);
     uint8_t  status;
@@ -52,10 +49,8 @@ static uint8_t ata_wait_drq(int bus) {
     return status;
 }
 
-// Select drive (master=0, slave=1), LBA mode
 static void ata_select(int bus, int drive, uint32_t lba_high4) {
     uint16_t base = bus_base(bus);
-    // 0xE0 = LBA mode | always-1 bits; drive bit = bit 4
     ata_outb(base + ATA_REG_HDDEVSEL,
          0xE0 | ((drive & 1) << 4) | (lba_high4 & 0x0F));
     ata_delay(bus);
@@ -67,45 +62,35 @@ static void ata_identify_drive(int bus, int drive) {
 
     uint16_t base = bus_base(bus);
 
-    // Select drive
     ata_select(bus, drive, 0);
 
-    // Send IDENTIFY
     ata_outb(base + ATA_REG_SECCOUNT, 0);
     ata_outb(base + ATA_REG_LBA0,     0);
     ata_outb(base + ATA_REG_LBA1,     0);
     ata_outb(base + ATA_REG_LBA2,     0);
     ata_outb(base + ATA_REG_COMMAND,  ATA_CMD_IDENTIFY);
 
-    // Read status — if 0 no drive
     uint8_t status = ata_inb(base + ATA_REG_STATUS);
     if (status == 0) return;
 
-    // Wait for BSY to clear
     ata_wait_bsy(bus);
 
-    // Check LBA1/LBA2 — if non-zero it's not ATA (e.g. ATAPI)
     if (ata_inb(base + ATA_REG_LBA1) || ata_inb(base + ATA_REG_LBA2)) return;
 
-    // Wait for DRQ
     status = ata_wait_drq(bus);
     if (status & ATA_SR_ERR) return;
 
-    // Read 256 words of IDENTIFY data
     uint16_t identify[256];
     for (int i = 0; i < 256; i++)
         identify[i] = ata_inw(base + ATA_REG_DATA);
 
-    // Sectors (28-bit LBA) at words 60-61
     d->sectors = ((uint32_t)identify[61] << 16) | identify[60];
 
-    // Model string at words 27-46 (each word is 2 chars, big-endian)
     int mi = 0;
     for (int w = 27; w <= 46; w++) {
         d->model[mi++] = (identify[w] >> 8) & 0xFF;
         d->model[mi++] = (identify[w]     ) & 0xFF;
     }
-    // Trim trailing spaces
     d->model[40] = 0;
     for (int i = 39; i >= 0 && d->model[i] == ' '; i--)
         d->model[i] = 0;
@@ -182,7 +167,6 @@ int ata_write(int bus, int drive, uint32_t lba, uint32_t count, const void *buf)
             ata_delay(bus);
         }
 
-        // Flush write cache
         ata_outb(base + ATA_REG_COMMAND, ATA_CMD_FLUSH);
         ata_wait_bsy(bus);
 

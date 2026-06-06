@@ -1,7 +1,6 @@
 #pragma once
 #include "../../stdint.h"
 
-// ── Key codes ─────────────────────────────────────────────────────────────────
 #define KEY_NONE        0x00
 #define KEY_BACKSPACE   0x08
 #define KEY_TAB         0x09
@@ -37,24 +36,20 @@
 #define KEY_PAGE_UP     0xA6
 #define KEY_PAGE_DOWN   0xA7
 
-// ── Modifier flags ────────────────────────────────────────────────────────────
 #define MOD_SHIFT   (1 << 0)
 #define MOD_CTRL    (1 << 1)
 #define MOD_ALT     (1 << 2)
 #define MOD_CAPS    (1 << 3)
 
-// ── Ring buffer ───────────────────────────────────────────────────────────────
 #define KBD_BUF_SIZE 64
 
-// ── Key event ─────────────────────────────────────────────────────────────────
 typedef struct {
-    uint8_t  scancode;   // KEY_* value or ASCII char (named scancode for compat)
-    uint8_t  mods;       // MOD_* flags
-    uint8_t  pressed;    // 1 = key down, 0 = key up
-    char     ascii;      // final printable char (0 if non-printable)
+    uint8_t  scancode;
+    uint8_t  mods;
+    uint8_t  pressed;
+    char     ascii;
 } key_event_t;
 
-// ── API ───────────────────────────────────────────────────────────────────────
 void    kbd_init(void);
 void    kbd_enqueue_scancode(uint8_t raw_scancode);
 int     kbd_poll(key_event_t *evt);

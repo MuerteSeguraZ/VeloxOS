@@ -128,7 +128,6 @@ int input_handle_click(int mx,int my){
     return 0;
 }
 
-// Now takes a key_event_t — no more raw scancode tables here
 void input_handle_key(const key_event_t *evt){
     if(!input_box.visible||!evt->pressed)return;
 
@@ -151,7 +150,6 @@ void input_handle_key(const key_event_t *evt){
         return;
     }
 
-    // TEXT mode
     if(evt->scancode==KEY_ENTER){
         input_box.visible=0;
         if(input_box.on_confirm)input_box.on_confirm(input_box.buf,input_box.userdata);

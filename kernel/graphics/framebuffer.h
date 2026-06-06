@@ -2,21 +2,18 @@
 #include "../stdint.h"
 
 typedef struct {
-    uint64_t addr;      // physical framebuffer address
-    uint32_t pitch;     // bytes per row
+    uint64_t addr;
+    uint32_t pitch;
     uint32_t width;
     uint32_t height;
     uint8_t  bpp;
-    uint32_t *backbuf;  // software back buffer (same size as screen)
+    uint32_t *backbuf;
 } framebuffer_t;
 
 extern framebuffer_t fb;
 
-// Init — pass backbuf pointer from mm_alloc
 void fb_init(uint64_t addr, uint32_t pitch, uint32_t width,
              uint32_t height, uint8_t bpp, void *backbuf);
-
-// Draw to back buffer
 void fb_putpixel(int x, int y, uint32_t color);
 void fb_fill_rect(int x, int y, int w, int h, uint32_t color);
 void fb_draw_hline(int x, int y, int w, uint32_t color);
@@ -25,18 +22,11 @@ void fb_draw_rect(int x, int y, int w, int h, uint32_t color);
 void fb_clear(uint32_t color);
 void fb_fill_gradient_v(int x, int y, int w, int h, uint32_t top, uint32_t bot);
 void fb_fill_gradient_h(int x, int y, int w, int h, uint32_t left, uint32_t right);
-
-// Blit full back buffer → screen
 void fb_flip(void);
-
-// Blit only a rectangular region → screen (fast partial update)
 void fb_flip_rect(int x, int y, int w, int h);
-
-// Save/restore a region of the back buffer (for cursor)
 void fb_save_region(int x, int y, int w, int h, uint32_t *out);
 void fb_restore_region(int x, int y, int w, int h, const uint32_t *in);
 
-// Color helpers
 static inline uint32_t rgb(uint8_t r, uint8_t g, uint8_t b) {
     return ((uint32_t)r << 16) | ((uint32_t)g << 8) | (uint32_t)b;
 }

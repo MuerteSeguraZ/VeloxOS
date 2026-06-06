@@ -1,8 +1,3 @@
-/*
- * explorer.c  —  VeloxOS File Explorer
- * Place at: kernel/apps/explorer.c
- */
-
 #include "explorer.h"
 #include "../ui/desktop.h"
 #include "../ui/window.h"
@@ -13,16 +8,14 @@
 #include "../graphics/framebuffer.h"
 #include "../graphics/text.h"
 
-// ── Sidebar label / target tables (defined once here, not in the header) ──────
 static const char *const sidebar_labels[EXPLO_SIDEBAR_ITEMS] = {
     "Desktop", "Documents", "Trash"
 };
-// NULL target = root; otherwise = VFS root-level folder name to look up
+
 static const char *const sidebar_targets[EXPLO_SIDEBAR_ITEMS] = {
     NULL, "Documents", "Trash"
 };
 
-// ── Toolbar button indices ────────────────────────────────────────────────────
 #define TBTN_BACK    0
 #define TBTN_UP      1
 #define TBTN_REFRESH 2
@@ -35,7 +28,6 @@ static const char *const tbtn_labels[TBTN_COUNT] = {
 };
 static const int tbtn_w[TBTN_COUNT] = { 50, 40, 62, 50, 70 };
 
-// ── Tiny utility functions (no libc in kernel) ────────────────────────────────
 static int ex_strlen(const char *s) {
     int n = 0; while (s[n]) n++; return n;
 }
@@ -54,7 +46,6 @@ static void ex_memset(void *p, uint8_t v, int n) {
     uint8_t *b = (uint8_t *)p; while (n--) *b++ = v;
 }
 
-// ── Layout helpers (all coordinates screen-absolute) ─────────────────────────
 static int toolbar_x(window_t *w) { return w->x; }
 static int toolbar_y(window_t *w) { return w->y + TITLEBAR_HEIGHT; }
 static int sidebar_x(window_t *w) { return w->x; }
@@ -71,12 +62,11 @@ static int max_visible_rows(window_t *w) {
     return r < 1 ? 1 : r;
 }
 
-// ── Toolbar button geometry ───────────────────────────────────────────────────
 static int tbtn_px(window_t *w, int btn) {
     int x = toolbar_x(w) + 4;
     for (int i = 0; i < btn; i++) {
         x += tbtn_w[i] + 3;
-        if (i == 1) x += 8; // gap after "Up" button
+        if (i == 1) x += 8;
     }
     return x;
 }
@@ -88,11 +78,9 @@ static int tbtn_hit(window_t *w, int btn, int mx, int my) {
     return mx >= bx && mx < bx + tbtn_w[btn] && my >= by && my < by + bh;
 }
 
-// ── Context menu state ────────────────────────────────────────────────────────
 static explorer_t *g_menu_ex = NULL;
 static int g_menu_item_idx = -1;
 
-// ── File list refresh ─────────────────────────────────────────────────────────
 void explorer_refresh(explorer_t *ex) {
     ex->item_count = 0;
     ex->selected   = -1;
@@ -104,7 +92,6 @@ void explorer_refresh(explorer_t *ex) {
     if (ex->nav_depth > 0)
         parent = ex->nav_stack[ex->nav_depth - 1].dir_idx;
 
-    // Collect dirs first, then files
     explo_item_t dirs[VFS_MAX_FILES];
     explo_item_t files[VFS_MAX_FILES];
     int di = 0, fi = 0;
@@ -126,7 +113,6 @@ void explorer_refresh(explorer_t *ex) {
     ex->needs_refresh = 0;
 }
 
-// ── Navigation ────────────────────────────────────────────────────────────────
 void explorer_navigate(explorer_t *ex, int dir_idx, const char *name) {
     if (ex->nav_depth >= EXPLO_MAX_PATH_DEPTH) return;
     explo_nav_entry_t *e = &ex->nav_stack[ex->nav_depth++];
@@ -141,7 +127,6 @@ void explorer_up(explorer_t *ex) {
     explorer_refresh(ex);
 }
 
-// ── Open selected entry ───────────────────────────────────────────────────────
 void explorer_open_selected(explorer_t *ex) {
     if (ex->selected < 0 || ex->selected >= ex->item_count) return;
     explo_item_t *it = &ex->items[ex->selected];
@@ -167,7 +152,6 @@ void explorer_open_selected(explorer_t *ex) {
     }
 }
 
-// ── Context menu callbacks ────────────────────────────────────────────────────
 static void on_rename_confirm(const char *text, void *ud) {
     (void)ud;
     explorer_t *ex = g_menu_ex;
@@ -208,7 +192,6 @@ static void on_delete_yes(const char *text, void *ud) {
 static void on_delete_no(void *ud) { (void)ud; desktop.needs_full_redraw = 1; }
 static void on_delete_cancel(void *ud) { (void)ud; desktop.needs_full_redraw = 1; }
 
-// ── Menu actions for context menu ─────────────────────────────────────────────
 static void action_rename(void) {
     if (g_menu_item_idx < 0 || !g_menu_ex) return;
     explorer_t *ex = g_menu_ex;
@@ -233,13 +216,11 @@ static void action_delete(void) {
     desktop.needs_full_redraw = 1;
 }
 
-// ── Draw ──────────────────────────────────────────────────────────────────────
 void explorer_draw(explorer_t *ex, window_t *win, int active) {
     if (!win->visible) return;
     (void)active;
     int wx = win->x, ww = win->w;
 
-    // ── Toolbar ───────────────────────────────────────────────────────────────
     {
         int ty = toolbar_y(win);
         fb_fill_rect(wx, ty, ww, EXPLO_TOOLBAR_H, COL_EXPLO_TOOLBAR_BG);
@@ -271,7 +252,6 @@ void explorer_draw(explorer_t *ex, window_t *win, int active) {
             text_puts_centered(bx, by + (bh - 8) / 2, bw, tbtn_labels[b], fg, 0, 1);
         }
 
-        // Breadcrumb path
         int bc_x = tbtn_px(win, TBTN_COUNT - 1) + tbtn_w[TBTN_COUNT - 1] + 10;
         int bc_y = ty + (EXPLO_TOOLBAR_H - 8) / 2;
         int bc_max = wx + ww - bc_x - 4;
@@ -296,7 +276,6 @@ void explorer_draw(explorer_t *ex, window_t *win, int active) {
         }
     }
 
-    // ── Sidebar ───────────────────────────────────────────────────────────────
     {
         int sx = sidebar_x(win);
         int sy = sidebar_y(win);
@@ -337,7 +316,6 @@ void explorer_draw(explorer_t *ex, window_t *win, int active) {
         }
     }
 
-    // ── Content pane ─────────────────────────────────────────────────────────
     {
         int cx  = content_x(win);
         int cy  = content_y(win);
@@ -430,7 +408,6 @@ void explorer_draw(explorer_t *ex, window_t *win, int active) {
         }
     }
 
-    // ── Status bar ────────────────────────────────────────────────────────────
     {
         int sy = statusbar_y(win);
         fb_fill_rect(wx, sy, ww, EXPLO_STATUSBAR_H, COL_EXPLO_STATUS_BG);
@@ -458,7 +435,6 @@ void explorer_draw(explorer_t *ex, window_t *win, int active) {
     }
 }
 
-// ── Keyboard handler ──────────────────────────────────────────────────────────
 int explorer_handle_key(explorer_t *ex, window_t *win, const key_event_t *evt) {
     if (!evt->pressed) return 0;
     int mvr = max_visible_rows(win);
@@ -490,7 +466,6 @@ int explorer_handle_key(explorer_t *ex, window_t *win, const key_event_t *evt) {
 
         case KEY_DELETE:
         if (ex->selected >= 0 && ex->selected < ex->item_count) {
-            // Show delete confirmation
             explo_item_t *it = &ex->items[ex->selected];
             g_menu_ex = ex;
             g_menu_item_idx = ex->selected;
@@ -521,19 +496,16 @@ int explorer_handle_key(explorer_t *ex, window_t *win, const key_event_t *evt) {
     }
 }
 
-// ── Mouse handler ─────────────────────────────────────────────────────────────
 int explorer_handle_mouse(explorer_t *ex, window_t *win,
                           int mx, int my, int lc, int rc) {
     if (!win->visible) return 0;
 
-    // Update toolbar button hover state
     ex->btn_back_hover      = tbtn_hit(win, TBTN_BACK,    mx, my);
     ex->btn_up_hover        = tbtn_hit(win, TBTN_UP,      mx, my);
     ex->btn_refresh_hover   = tbtn_hit(win, TBTN_REFRESH, mx, my);
     ex->btn_newfile_hover   = tbtn_hit(win, TBTN_NEWFILE, mx, my);
     ex->btn_newfolder_hover = tbtn_hit(win, TBTN_NEWFLD,  mx, my);
 
-    // ── Toolbar clicks ────────────────────────────────────────────────────────
     if (lc) {
         if (tbtn_hit(win, TBTN_BACK, mx, my)) {
             explorer_up(ex); desktop.needs_full_redraw = 1; return 1;
@@ -570,7 +542,6 @@ int explorer_handle_mouse(explorer_t *ex, window_t *win,
         }
     }
 
-    // ── Sidebar ───────────────────────────────────────────────────────────────
     {
         int sx = sidebar_x(win);
         int sy = sidebar_y(win);
@@ -603,7 +574,6 @@ int explorer_handle_mouse(explorer_t *ex, window_t *win,
         }
     }
 
-    // ── Content pane ─────────────────────────────────────────────────────────
     {
         int cx  = content_x(win);
         int cy  = content_y(win);
@@ -625,17 +595,15 @@ int explorer_handle_mouse(explorer_t *ex, window_t *win,
                     }
                 }
                 if (rc) {
-                    // Right-click: show context menu
                     ex->selected = row;
                     g_menu_ex = ex;
                     g_menu_item_idx = row;
                     menu_clear();
                     menu_add_item("Rename", action_rename);
                     menu_add_item("Delete", action_delete);
-                    // Show menu at absolute screen coordinates
                     menu_show(mx, my);
                     desktop.needs_full_redraw = 1;
-                    return 1;  // Consume the event
+                    return 1;
                 }
             } else if (lc) {
                 ex->selected = -1;
@@ -649,7 +617,6 @@ int explorer_handle_mouse(explorer_t *ex, window_t *win,
     return 0;
 }
 
-// ── Lifecycle ─────────────────────────────────────────────────────────────────
 explorer_t *explorer_create(void) {
     explorer_t *ex = (explorer_t *)mm_alloc(sizeof(explorer_t));
     if (!ex) return 0;

@@ -6,10 +6,8 @@ static idt_ptr_t     idt_ptr;
 static irq_handler_t irq_handlers[16];
 static irq_handler_t lapic_handlers[256];
 
-/* Flipped to 1 once IOAPIC takes over from the PIC */
 static int g_apic_eoi = 0;
 
-/* Forward declaration — avoids pulling lapic.h into idt.c */
 extern void lapic_eoi(void);
 
 static inline void idt_outb(uint16_t port, uint8_t val) {
@@ -52,8 +50,8 @@ static void pic_remap(void) {
     idt_outb(PIC2_DATA, 0x02); io_wait();
     idt_outb(PIC1_DATA, 0x01); io_wait();
     idt_outb(PIC2_DATA, 0x01); io_wait();
-    idt_outb(PIC1_DATA, 0xF8); /* IRQ 0,1,2 unmasked */
-    idt_outb(PIC2_DATA, 0xEF); /* IRQ 12 unmasked    */
+    idt_outb(PIC1_DATA, 0xF8);
+    idt_outb(PIC2_DATA, 0xEF);
 }
 
 static void kbd_irq_handler(void) {
@@ -100,10 +98,8 @@ void irq_dispatch(int irq) {
     if (irq_handlers[irq]) irq_handlers[irq]();
 
     if (g_apic_eoi) {
-        /* IOAPIC-delivered: acknowledge via LAPIC */
         lapic_eoi();
     } else {
-        /* Legacy PIC-delivered: acknowledge via 8259 */
         if (irq >= 8) idt_outb(PIC2_CMD, 0x20);
         idt_outb(PIC1_CMD, 0x20);
     }

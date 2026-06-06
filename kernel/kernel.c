@@ -25,7 +25,6 @@ typedef struct {
 typedef struct { uint32_t total_size, reserved; }
     __attribute__((packed)) mb2_info_t;
 
-/* Declared in idt.c */
 extern void lapic_vector_register(uint8_t vec, irq_handler_t handler);
 
 #define HEAP_START 0x1000000ULL
@@ -82,7 +81,6 @@ void kernel_main(uint32_t mb2_info_phys) {
     DPRINT_INIT();
     DPRINT("\n=== Velox OS Kernel Boot ===\n\n");
 
-    /* ── ACPI + APIC ─────────────────────────────────────────────────── */
     if (acpi_init(rsdp_addr) == 0) {
         acpi_info_t *acpi = acpi_get_info();
 
@@ -102,9 +100,9 @@ void kernel_main(uint32_t mb2_info_phys) {
 
             uint8_t bsp = lapic_id();
 
-            ioapic_map_irq(0,  0x20, bsp);   /* PIT timer  */
-            ioapic_map_irq(1,  0x21, bsp);   /* keyboard   */
-            ioapic_map_irq(12, 0x2C, bsp);   /* PS/2 mouse */
+            ioapic_map_irq(0,  0x20, bsp);
+            ioapic_map_irq(1,  0x21, bsp);
+            ioapic_map_irq(12, 0x2C, bsp);
 
             pic_disable();
             idt_enable_apic_eoi();
@@ -117,14 +115,12 @@ void kernel_main(uint32_t mb2_info_phys) {
 
     pit_init(60);
 
-    /* ── PCI ─────────────────────────────────────────────────────────── */
     DPRINT("Initializing PCI bus...\n");
     pci_init();
     int pci_count = pci_enumerate();
     (void)pci_count;
     DPRINT("\n");
 
-    /* ── Bus / device layer ──────────────────────────────────────────── */
     DPRINT("Registering system devices...\n");
     bus_register("ata-primary",   "storage", ata_bus_probe,   ata_bus_init);
     bus_register("ata-secondary", "storage", ata_bus_probe,   ata_bus_init);
@@ -136,7 +132,6 @@ void kernel_main(uint32_t mb2_info_phys) {
     (void)devices_init;
     DPRINT("Device initialization complete\n\n");
 
-    /* ── Filesystem ──────────────────────────────────────────────────── */
     DPRINT("Searching for storage devices...\n");
     ata_drive_t *disk = 0; int found_bus = -1, found_drv = -1;
     for (int b = 0; b <= 1 && !disk; b++)
@@ -169,7 +164,6 @@ void kernel_main(uint32_t mb2_info_phys) {
     }
     DPRINT("\n");
 
-    /* ── UI ──────────────────────────────────────────────────────────── */
     DPRINT("Initializing desktop...\n");
     desktop_init();
     desktop_add_window(80,  60,  340, 220, fs_ok ? "Welcome - Disk OK" : "Welcome - No Disk");
@@ -180,7 +174,6 @@ void kernel_main(uint32_t mb2_info_phys) {
 
     uint64_t last_clock_tick = 0;
 
-    /* ── Main event loop ─────────────────────────────────────────────── */
     while (1) {
         pit_wait_tick();
 
