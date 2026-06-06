@@ -42,6 +42,32 @@ static int icon_drag_was_selected = 0;
 static void cell_to_px(int c, int r, int *px, int *py);
 static void icon_get_pos(int idx, int *ox, int *oy);
 static void icons_assign_slots(void);
+static void try_close_window(window_node_t *node);
+static window_node_t *win_stack[MAX_WINDOWS];
+static int            win_stack_count;
+
+static void build_win_stack(void) {
+    win_stack_count = 0;
+    for (window_node_t *n = desktop.windows; n; n = n->next)
+        if (win_stack_count < MAX_WINDOWS) win_stack[win_stack_count++] = n;
+}
+
+static void bring_to_front(window_node_t *node) {
+    if (!node || !node->next) return;
+    if (desktop.windows == node) {
+        desktop.windows = node->next;
+    } else {
+        window_node_t *prev = desktop.windows;
+        while (prev->next && prev->next != node) prev = prev->next;
+        if (!prev->next) return;
+        prev->next = node->next;
+    }
+    node->next = NULL;
+    window_node_t *tail = desktop.windows;
+    if (!tail) { desktop.windows = node; return; }
+    while (tail->next) tail = tail->next;
+    tail->next = node;
+}
 
 static int windows_overlap(int x1, int y1, int w1, int h1,
                           int x2, int y2, int w2, int h2) {
@@ -751,12 +777,13 @@ void desktop_mouse_move(int dx, int dy, int btn_left, int btn_right) {
         } else {
             menu_icon_target = -1;
             int in_folder_win = 0;
-            for (window_node_t *node = desktop.windows; node; node = node->next) {
-                window_t *w = node->win;
+            build_win_stack();
+            for (int _i = win_stack_count - 1; _i >= 0; _i--) {
+                window_t *w = win_stack[_i]->win;
                 if (!w->visible) continue;
                 if (desktop.mx >= w->x && desktop.mx < w->x + w->w &&
                     desktop.my >= w->y && desktop.my < w->y + w->h) {
-                    if (w->explorer) { 
+                    if (w->explorer) {
                         in_folder_win = 1;
                         explorer_handle_mouse(w->explorer, w, desktop.mx, desktop.my, 0, 1);
                         desktop.needs_full_redraw = 1;
@@ -834,12 +861,14 @@ void desktop_mouse_move(int dx, int dy, int btn_left, int btn_right) {
                             w->minimized = 0;
                             w->visible   = 1;
                             desktop.active_win = node;
+                            bring_to_front(node);
                         } else if (node == desktop.active_win) {
                             w->minimized = 1;
                             w->visible   = 0;
                             desktop.active_win = NULL;
                         } else {
                             desktop.active_win = node;
+                            bring_to_front(node);
                         }
                         desktop.needs_full_redraw = 1;
                         goto done;
@@ -851,11 +880,12 @@ void desktop_mouse_move(int dx, int dy, int btn_left, int btn_right) {
             }
         }
 
+        build_win_stack();
         window_node_t *topmost = NULL;
-        for (window_node_t *node = desktop.windows; node; node = node->next) {
-            window_t *w = node->win;
+        for (int _i = win_stack_count - 1; _i >= 0; _i--) {
+            window_t *w = win_stack[_i]->win;
             if (!w->visible) continue;
-            if (window_hit_button(w, desktop.mx, desktop.my)) { topmost = node; break; }
+            if (window_hit_button(w, desktop.mx, desktop.my)) { topmost = win_stack[_i]; break; }
         }
         if (topmost) {
             window_t *w = topmost->win;
@@ -865,12 +895,15 @@ void desktop_mouse_move(int dx, int dy, int btn_left, int btn_right) {
         }
 
         int cw = 0;
-        for (window_node_t *node = desktop.windows; node; node = node->next) {
+        for (int _i = win_stack_count - 1; _i >= 0; _i--) {
+            window_node_t *node = win_stack[_i];
             window_t *w = node->win;
             if (!w->visible) continue;
             if (desktop.mx >= w->x && desktop.mx < w->x + w->w &&
                 desktop.my >= w->y && desktop.my < w->y + w->h) {
-                desktop.active_win = node; cw = 1;
+                desktop.active_win = node;
+                bring_to_front(node);
+                cw = 1;
                 if (desktop.my < w->y + TITLEBAR_HEIGHT) {
                     w->dragging = 1;
                     w->drag_ox  = desktop.mx - w->x;
