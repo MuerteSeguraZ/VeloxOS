@@ -1,5 +1,3 @@
-; isr.asm — IRQ stubs for Velox OS
-
 BITS 64
 
 extern irq_dispatch
@@ -43,8 +41,6 @@ irq_stub_%1:
     iretq
 %endmacro
 
-; LAPIC-delivered vectors: calls lapic_dispatch(vec) which sends LAPIC EOI.
-; Do NOT use irq_dispatch for these — that sends PIC EOI which is wrong.
 %macro LAPIC_STUB 1
 global lapic_stub_%1
 lapic_stub_%1:
@@ -100,5 +96,4 @@ IRQ_STUB 13
 IRQ_STUB 14
 IRQ_STUB 15
 
-; LAPIC timer — vector 0x40, well clear of PIC range 0x20-0x2F
 LAPIC_STUB 0x40
