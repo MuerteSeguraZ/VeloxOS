@@ -19,3 +19,4 @@
 #include "mm/alloc.h"
 #include "fs/fs.h"
 #include "apps/explorer.h"
+#include "apps/shell.h"

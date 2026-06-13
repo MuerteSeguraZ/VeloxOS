@@ -7,6 +7,7 @@
 #include "../fs/fs.h"
 #include "../mm/alloc.h"
 #include "../apps/explorer.h"
+#include "../apps/shell.h"
 
 desktop_t desktop;
 
@@ -38,6 +39,7 @@ static int drag_moved             = 0;
 static int icon_drag_was_selected = 0;
 
 #define DESKTOP_EXPLORER_IDX  99999
+#define DESKTOP_SHELL_IDX     99998
 
 static void cell_to_px(int c, int r, int *px, int *py);
 static void icon_get_pos(int idx, int *ox, int *oy);
@@ -155,6 +157,7 @@ static int grid_cols(void) {
 
 static int cell_taken(int c, int r, int exclude) {
     if (c == 1 && r == 0) return 1;
+    if (c == 2 && r == 0) return 1;
     
     for (int i = 0; i < VFS_MAX_FILES; i++) {
         if (i == exclude) continue;
@@ -218,6 +221,13 @@ static int icon_at(int mx, int my) {
         my >= explorer_iy && my < explorer_iy + ICON_H + ICON_LABEL_H) {
         return DESKTOP_EXPLORER_IDX;
     }
+
+    int shell_ix = ICON_GRID_X + ICON_CELL_W * 2;
+    int shell_iy = ICON_GRID_Y;
+    if (mx >= shell_ix && mx < shell_ix + ICON_W &&
+        my >= shell_iy && my < shell_iy + ICON_H + ICON_LABEL_H) {
+        return DESKTOP_SHELL_IDX;
+    }
     
     for (int i = 0; i < VFS_MAX_FILES; i++) {
         if (!vfs.entries[i].used) continue;
@@ -247,6 +257,10 @@ static window_node_t *pending_close_node = NULL;
 
 static void do_close_window(window_node_t *node) {
     if (!node) return;
+    if (node->win->shell) {
+        shell_destroy(node->win->shell);
+        node->win->shell = NULL;
+    }
     if (node->win->explorer) {
         explorer_destroy(node->win->explorer);
         node->win->explorer = NULL;
@@ -412,6 +426,19 @@ static void action_open_explorer(void) {
     desktop.needs_full_redraw = 1;
 }
 
+static void action_open_shell(void) {
+    int final_x, final_y;
+    find_free_window_pos(SHELL_DEFAULT_X, SHELL_DEFAULT_Y,
+                        SHELL_W, SHELL_H, &final_x, &final_y);
+    window_node_t *node = desktop_add_window(final_x, final_y,
+                                            SHELL_W, SHELL_H, "Shell");
+    if (!node) return;
+    shell_t *sh = shell_create();
+    if (!sh) { do_close_window(node); return; }
+    node->win->shell = sh;
+    desktop.needs_full_redraw = 1;
+}
+
 static int active_folder_idx = -1;
 
 static void action_new_file_in_folder(void) {
@@ -543,6 +570,26 @@ static void draw_icons(void) {
         fb_draw_rect(ix, iy + 6, ICON_W, ICON_H - 6, 0x6aafdf);
         text_puts(ix + (ICON_W - 56) / 2, iy + ICON_H + 2, "Explorer", 0xd8e8f8, 0, 1);
     }
+
+    {
+        int ix = ICON_GRID_X + ICON_CELL_W * 2;
+        int iy = ICON_GRID_Y;
+        if (DESKTOP_SHELL_IDX == desktop.selected_icon && selected_icon_ctx == VFS_ROOT_PARENT) {
+            fb_fill_rect(ix - 2, iy - 2, ICON_W + 4, ICON_H + ICON_LABEL_H + 4, 0x2a4a7a);
+            fb_draw_rect(ix - 2, iy - 2, ICON_W + 4, ICON_H + ICON_LABEL_H + 4, 0x4a7fa5);
+        }
+        fb_fill_rect(ix,     iy,          ICON_W,      ICON_H,     0x0d1117);
+        fb_draw_rect(ix,     iy,          ICON_W,      ICON_H,     0x3a6a4a);
+        fb_fill_rect(ix,     iy,          ICON_W,      6,          0x1a3a2a);
+        fb_draw_hline(ix,    iy + 6,      ICON_W,                  0x3a6a4a);
+        fb_draw_hline(ix + 8,  iy + 13,  10,                      0x40c060);
+        fb_draw_vline(ix + 8,  iy + 10,   7,                      0x40c060);
+        fb_draw_vline(ix + 18, iy + 10,   7,                      0x40c060);
+        fb_fill_rect(ix + 22, iy + 13,   4,  6,                   0x80ff80);
+        fb_draw_hline(ix + 8,  iy + 22,  28,                      0x2a5a3a);
+        fb_draw_hline(ix + 8,  iy + 27,  20,                      0x2a5a3a);
+        text_puts(ix + (ICON_W - 36) / 2, iy + ICON_H + 2, "Shell", 0xd8e8f8, 0, 1);
+    }
     
     for (int i = 0; i < VFS_MAX_FILES; i++) {
         if (!vfs.entries[i].used) continue;
@@ -591,7 +638,11 @@ static void draw_taskbar(void) {
     fb_draw_rect(66, by, 66, bh, 0x2a3a5a);
     text_puts_centered(66, by + (bh - 8) / 2, 66, "Explorer", 0x8ab8e0, 0, 1);
 
-    int wx = 140;
+    fb_fill_rect(136, by, 54, bh, COL_TASKBAR_BTN);
+    fb_draw_rect(136, by, 54, bh, 0x2a3a5a);
+    text_puts_centered(136, by + (bh - 8) / 2, 54, "Shell", 0x80c080, 0, 1);
+
+    int wx = 194;
     for (window_node_t *node = desktop.windows; node; node = node->next) {
         window_t *w = node->win;
         if (!w->visible && !w->minimized) continue;
@@ -603,6 +654,7 @@ static void draw_taskbar(void) {
         else {
             uint32_t dot = w->minimized ? 0x888888 : (active ? 0x80c0ff : 0x405070);
             if (w->explorer) dot = active ? 0x5ab8ff : 0x2a5a8a;
+            if (w->shell)    dot = active ? 0x60e080 : 0x2a5a3a;
             fb_fill_rect(wx + 4, by + bh / 2 - 2, 4, 4, dot);
         }
         text_puts(wx + 14, by + (bh - 8) / 2, w->title, active ? 0xf0f0f0 : 0x8899bb, 0, 1);
@@ -652,6 +704,7 @@ window_node_t *desktop_add_window(int x, int y, int w, int h, const char *title)
     win->folder_idx = -1;
     win->fs_idx = -1; win->scroll_row = 0;
     win->explorer = NULL;
+    win->shell = NULL;
     int i = 0; while (title[i] && i < TITLE_MAX - 1) { win->title[i] = title[i]; i++; } win->title[i] = 0;
     node->win  = win;
     node->next = NULL;
@@ -676,7 +729,9 @@ void desktop_redraw(void) {
         int is_active = (node == desktop.active_win);
         window_draw(w, is_active);
         if (w->visible) {
-            if (w->explorer) {
+            if (w->shell) {
+                shell_draw(w->shell, w, is_active);
+            } else if (w->explorer) {
                 explorer_draw(w->explorer, w, is_active);
             } else if (w->folder_idx >= 0) {
                 draw_folder_icons(w->x, w->y, w->w, w->folder_idx);
@@ -719,6 +774,11 @@ void desktop_handle_key(const key_event_t *evt) {
     if (input_box.visible) { input_handle_key(evt); input_box.dirty = 1; return; }
     if (desktop.active_win) {
         window_t *w = desktop.active_win->win;
+        if (w->shell) {
+            if (shell_handle_key(w->shell, w, evt))
+                desktop.needs_full_redraw = 1;
+            return;
+        }
         if (w->explorer) {
             if (explorer_handle_key(w->explorer, w, evt))
                 desktop.needs_full_redraw = 1;
@@ -762,6 +822,13 @@ void desktop_mouse_move(int dx, int dy, int btn_left, int btn_right) {
         
         if (icon == DESKTOP_EXPLORER_IDX) {
             menu_add_item("Open", action_open_explorer);
+            if (ctx_menu.nitems > 0) menu_show(desktop.mx, desktop.my);
+            desktop.needs_full_redraw = 1;
+            goto done;
+        }
+
+        if (icon == DESKTOP_SHELL_IDX) {
+            menu_add_item("Open", action_open_shell);
             if (ctx_menu.nitems > 0) menu_show(desktop.mx, desktop.my);
             desktop.needs_full_redraw = 1;
             goto done;
@@ -852,7 +919,12 @@ void desktop_mouse_move(int dx, int dy, int btn_left, int btn_right) {
                     desktop.needs_full_redraw = 1;
                     goto done;
                 }
-                int wx = 140;
+                if (desktop.mx >= 136 && desktop.mx < 190) {
+                    action_open_shell();
+                    desktop.needs_full_redraw = 1;
+                    goto done;
+                }
+                int wx = 194;
                 for (window_node_t *node = desktop.windows; node; node = node->next) {
                     window_t *w = node->win;
                     if (!w->visible && !w->minimized) { wx += 118; continue; }
@@ -939,6 +1011,15 @@ void desktop_mouse_move(int dx, int dy, int btn_left, int btn_right) {
                 if (icon == DESKTOP_EXPLORER_IDX) {
                     if (already) {
                         action_open_explorer();
+                        desktop.selected_icon = -1;
+                        selected_icon_ctx = VFS_ROOT_PARENT;
+                    } else {
+                        desktop.selected_icon = icon;
+                        selected_icon_ctx = VFS_ROOT_PARENT;
+                    }
+                } else if (icon == DESKTOP_SHELL_IDX) {
+                    if (already) {
+                        action_open_shell();
                         desktop.selected_icon = -1;
                         selected_icon_ctx = VFS_ROOT_PARENT;
                     } else {

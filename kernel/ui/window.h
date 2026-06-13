@@ -31,6 +31,7 @@
 #define COL_DIRTY_DOT          0xe0a030
 
 struct explorer_t;
+struct shell_t;
 
 typedef struct {
     int  x, y, w, h;
@@ -50,6 +51,7 @@ typedef struct {
     int  folder_idx;
     int  scroll_row;
     struct explorer_t *explorer;
+    struct shell_t *shell;
 } window_t;
 
 void window_draw(window_t *win, int active);
